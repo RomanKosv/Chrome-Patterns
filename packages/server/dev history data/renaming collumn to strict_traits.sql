@@ -1,0 +1,1 @@
+alter table pattern_tree_nodes rename column abstract_action to strict_traits
