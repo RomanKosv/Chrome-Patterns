@@ -10,5 +10,4 @@ export type RealtimeAction =
     & {
         window : Window
     }
-    ;
 

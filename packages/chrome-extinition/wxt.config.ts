@@ -5,7 +5,7 @@ export default defineConfig(
     {
         manifest: {
             host_permissions: [
-            "http://localhost:3000/*" 
+            "http://localhost:3006/*" 
             ]
         }
     }

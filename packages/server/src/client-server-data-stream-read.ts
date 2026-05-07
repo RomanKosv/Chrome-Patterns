@@ -1,22 +1,22 @@
-import type { ActionInfo } from "./client-server-data-stream-contract.js"
+import type { ActionInfo } from "@chrome-patterns/shared/actions"
 import { createChildNode, getChildNode, insertAction, visitNode } from "./db-funcs.js";
-import type { PatternTreeNode, User } from "./db-types.js";
 import { Pool as DBPool } from 'pg';
+import type { UserSettings } from "@chrome-patterns/shared/user";
 
-async function readStream(actions : Iterable<ActionInfo>, user : User, pool : DBPool) {
+export async function readActionStream(actions : Iterable<ActionInfo>, userID : number, settings : UserSettings, pool : DBPool) {
     let cursors : (number | null)[] = [null]
     for(let actionInfo of actions) {
-        const action = await insertAction(user.id, actionInfo, pool)
-        for(let curs_i = 0; curs_i++; curs_i < cursors.length) {
+        const action = await insertAction(userID, actionInfo, pool)
+        for(let curs_i = 0; curs_i < cursors.length; curs_i++) {
             let c = cursors[curs_i] as number | null
-            let c1 = (await getChildNode(user.id, c, actionInfo.strictTraits, pool))?.id
-            if (c1 == undefined) {
-                c1 = (await createChildNode(user.id, c, actionInfo.strictTraits, pool))
+            let c1 = (await getChildNode(userID, c, actionInfo.strictTraits, pool))?.id
+            if (c1 === undefined) {
+                c1 = (await createChildNode(userID, c, actionInfo.strictTraits, pool))
             }
-            await visitNode(user.id, c1, action, pool)
+            await visitNode(userID, c1, action, pool)
             cursors[curs_i] = c1
         }
-        if (cursors.length >= user.max_pattern_lenght) {
+        if (cursors.length >= settings.maxPatternLenght) {
             cursors.shift()
         }
         cursors.push(null)

@@ -1,8 +1,9 @@
-import type {StrictTraitsSet} from "./abstract-actions.js";
+import type {StrictTraitsSet} from "@chrome-patterns/shared/actions";
 
 export interface User {
   id: number,
-  max_pattern_lenght : number
+  max_pattern_lenght : number,
+  username : string
 }
 
 export interface Action {

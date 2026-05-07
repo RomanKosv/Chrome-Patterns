@@ -1,18 +1,17 @@
-import { SerializedAction } from "@/lib/serialisation";
-import { IsEssentialActionTraitSelector } from "@/lib/traits";
-
-
+import { Message } from "@/lib/messages";
+import { isEsentialAction, toActionInfo } from "@/lib/traits-selection";
 
 
 export default defineContentScript({
   matches: ['*://*/*'],
   main() {
+    console.log("content script!")
     window.addEventListener(
       'click',
       (event) => {
         console.log('Пользователь кликнул на:', event.target);
-        const message = {
-          action : new SerializedAction(
+        const message : Message = {
+          action : toActionInfo(
             {
               actionType : 'click',
               event : event,
@@ -24,13 +23,13 @@ export default defineContentScript({
         // if (IsEssentialActionTraitSelector.getFrom(message.action)) {
         //   message.action.tryActivateOn(document);
         // }
-        browser.runtime.sendMessage(
-          message,
-          (response) => {
-            console.log("Action delivered!");
-          }
-        )
-        
+        if (isEsentialAction(message.action))
+          browser.runtime.sendMessage(
+            message,
+            (response) => {
+              console.log("Action delivered!");
+            }
+          )
       }
     );
   },

@@ -1,8 +1,9 @@
 import { Pool as DBPool } from 'pg';
-import type { StrictTraitsSet } from './abstract-actions.js';
-import type { Action, PatternTreeNode } from './db-types.js';
-import { findPackageJSON } from 'node:module';
-import type { ActionInfo } from './client-server-data-stream-contract.js';
+import type { StrictTraitsSet, ActionInfo } from '@chrome-patterns/shared/actions';
+import type { Action, PatternTreeNode, User } from './db-types.js';
+import { defaultSettings } from './default-settings.js';
+import type { PatternConsquense, PatternTreeNode as PatternTreeData} from '@chrome-patterns/shared/pattern-tree';
+import type { UserSettings } from '@chrome-patterns/shared/user';
 
 export async function getChildNode(userID : number, parentID : number | null, traits : StrictTraitsSet, pool : DBPool) : Promise<PatternTreeNode | undefined> {
     return (
@@ -80,4 +81,73 @@ export async function insertAction(userID : number, action: ActionInfo, pool : D
             [userID, action.time, action.page]
         )
     ).rows[0] !!
+}
+
+export async function getUserByUsername(username : string, pool : DBPool) : Promise<User | undefined> {
+    return (
+        await pool.query<User>(
+            `
+            select * from users
+                where username = $1
+            `,
+            [username]
+        )
+    ).rows[0]
+}
+
+export async function tryCreateUser(username: string, pool : DBPool) : Promise<User | undefined> {
+    return (
+        await pool.query<User>(
+            `
+            insert into users
+                (username)
+                values ($1, $2)
+                on conflict (username) do nothing
+                returning *
+            `,
+            [username, defaultSettings.maxPatternLenght]
+        )
+    ).rows[0]
+}
+
+export async function getPatternTree(userID : number, pool : DBPool, currentNodeID : number |null = null) : Promise<PatternTreeData> {
+    const childs = (
+        await pool.query<PatternTreeNode>(
+            `
+            select * from pattern_tree_nodes
+                where user_id = $1 and parent_id = $2
+            `,
+            [userID, currentNodeID]
+        )
+    ).rows
+    const childData : PatternConsquense[] = []
+    for (const cons of childs) {
+        childData.push(
+            {
+                node : await getPatternTree(userID, pool, cons.id),
+                traits : cons.strict_traits,
+                enterCount : cons.enter_count
+            }
+        )
+    }
+    return {
+        consequences : childData
+    }
+}
+
+export async function changeUserSettings(userID : number, settings : UserSettings, pool : DBPool) {
+    await pool.query(
+        `
+        update users
+            set max_pattern_lenght = $2
+            where id = $1
+        `,
+        [userID, settings.maxPatternLenght]
+    )
+}
+
+export function getUserSettings(user : User) : UserSettings {
+    return {
+        maxPatternLenght : user.max_pattern_lenght
+    }
 }
