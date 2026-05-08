@@ -19,6 +19,7 @@
     "wxt": "^0.20.20"
   },
   "dependencies": {
-    "@chrome-patterns/shared" : "^1.0.0"
+    "@chrome-patterns/shared": "^1.0.0",
+    "fast-json-stable-stringify": "^2.1.0"
   }
 }

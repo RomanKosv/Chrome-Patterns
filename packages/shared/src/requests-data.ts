@@ -14,7 +14,8 @@ export type PullDataAns = {
 export type PushDataReq = {
     auth : UserAuthData,
     settings : UserSettings,
-    actions : ActionInfo[]
+    actions : ActionInfo[],
+    actionsPrefix : ActionInfo[]
 }
 
 export type PushDataAns = "succes" | "fail"

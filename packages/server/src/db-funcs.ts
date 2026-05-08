@@ -100,7 +100,7 @@ export async function tryCreateUser(username: string, pool : DBPool) : Promise<U
         await pool.query<User>(
             `
             insert into users
-                (username)
+                (username, max_pattern_lenght)
                 values ($1, $2)
                 on conflict (username) do nothing
                 returning *
@@ -115,7 +115,7 @@ export async function getPatternTree(userID : number, pool : DBPool, currentNode
         await pool.query<PatternTreeNode>(
             `
             select * from pattern_tree_nodes
-                where user_id = $1 and parent_id = $2
+                where user_id = $1 and (parent_id is not distinct from $2)
             `,
             [userID, currentNodeID]
         )

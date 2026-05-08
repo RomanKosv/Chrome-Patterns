@@ -6,7 +6,8 @@ export default defineConfig(
         manifest: {
             host_permissions: [
             "http://localhost:3006/*" 
-            ]
+            ],
+            permissions : ['alarms', 'storage']
         }
     }
 );

@@ -7,12 +7,13 @@ import {Pool as DBPool} from 'pg';
 import type { PatternTreeNode } from '@chrome-patterns/shared/pattern-tree';
 import { changeUserSettings, getPatternTree, getUserSettings } from './db-funcs.js';
 import { readActionStream as readActionStream } from './client-server-data-stream-read.js';
+import { request } from 'node:http';
 
 const pool : DBPool = new DBPool(
     {
         user: 'postgres',
         host: 'localhost',
-        database: 'Chrome-Patterns',
+        database: 'ChromePatterns',
         password: 'test123',
         port: 5432
     }
@@ -24,7 +25,7 @@ app.use(express.json());
 
 app.post('/pull_data', async (req: Request, res: Response) => {
     // 1. Получение данных (Запрос)
-
+    console.log('pull request, body: ', req.body)
     try{
         let reqest : PullDataReq = req.body
         let user = await getOrCreateUser(reqest.auth, pool);
@@ -35,22 +36,25 @@ app.post('/pull_data', async (req: Request, res: Response) => {
         }
         res.json(ans)
     }
-    catch {
+    catch (e){
         const ans : PullDataAns = "fail"
+        console.log('pull error: ', e)
         res.json(ans)
     }
 });
 
 app.post('/push_data', async (req: Request, res: Response) => {
+    console.log('push request, body: ', req.body)
     try {
         let reqest : PushDataReq = req.body
         let user = await getOrCreateUser(reqest.auth, pool);
         await changeUserSettings(user.id, reqest.settings, pool)
-        readActionStream(reqest.actions, user.id, reqest.settings, pool)
+        readActionStream(reqest.actions, reqest.actionsPrefix, user.id, reqest.settings, pool)
         let ans : PushDataAns = "succes"
         res.json(ans)
     }
-    catch {
+    catch (e) {
+        console.log('push error: ', e)
         let ans : PushDataAns = "fail"
         res.json(ans)
     }
