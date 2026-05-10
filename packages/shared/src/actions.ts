@@ -1,6 +1,6 @@
 
 
-export type StrictTraitsSet = Record<string, unknown>
+export type StrictTraitsSet = unknown
 
 export type ActionInfo = {
     strictTraits : StrictTraitsSet,

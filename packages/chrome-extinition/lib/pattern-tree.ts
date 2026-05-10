@@ -15,7 +15,7 @@ export function asPatternTreeNodeID(str : string) : PatternTreeNodeID | undefine
 
 type PatternTreeIncrement1 = {
     lastActionTraits : unknown,
-    enterCount : number,
+    probabilityMetric : number,
     parentID : PatternTreeNodeID
 }
 
@@ -28,7 +28,10 @@ export type PatternTreeNode1 = {
 
 type PatternTreeNodesStorage = Record<PatternTreeNodeID, PatternTreeNode1 | undefined>
 
-export type PatternTreeStorage = PatternTreeNodesStorage & {rootPatternTreeNode : PatternTreeNodeID}
+export type PatternTreeStorage = PatternTreeNodesStorage & {
+    rootPatternTreeNode : PatternTreeNodeID,
+    probabilityMetricOfFullVariety : number
+}
 
 export function createPatternTreeNodeFromData(data: PatternTreeNodeData, storage : PatternTreeNodesStorage, increment?: PatternTreeIncrement1) : PatternTreeNodeID {
     let id : PatternTreeNodeID = `pattern_tree_node (id = ${crypto.randomUUID()})`
@@ -45,7 +48,7 @@ export function createPatternTreeNodeFromData(data: PatternTreeNodeData, storage
                 storage,
                 {
                     lastActionTraits : cons.traits,
-                    enterCount : cons.enterCount,
+                    probabilityMetric : cons.probabilityMetric,
                     parentID : id
                 }
             )
@@ -56,9 +59,16 @@ export function createPatternTreeNodeFromData(data: PatternTreeNodeData, storage
 }
 
 export function createPatternTreeFromData(data : PatternTreeNodeData) : PatternTreeStorage {
-    let storage : PatternTreeNodesStorage & {rootPatternTreeNode : PatternTreeNodeID | undefined}
+    let probabilityMetricOfFullVariety = 0
+    for (let cons of data.consequences)
+        probabilityMetricOfFullVariety += cons.probabilityMetric
+    let storage : PatternTreeNodesStorage & {
+        rootPatternTreeNode : PatternTreeNodeID | undefined,
+        probabilityMetricOfFullVariety : number
+    }
         = {
-            rootPatternTreeNode : undefined
+            rootPatternTreeNode : undefined,
+            probabilityMetricOfFullVariety : probabilityMetricOfFullVariety
         }
     storage.rootPatternTreeNode = createPatternTreeNodeFromData(data, storage)
     return storage as PatternTreeStorage
@@ -91,7 +101,7 @@ export function getAutomationSetID(node : PatternTreeNodeID) : AutomationSetID {
     return `automation for ${node}`
 }
 
-export function collectBestAutomations(tree : PatternTreeStorage, storage : AutomationsStorage, nodeID : PatternTreeNodeID | undefined) : AutomationSetID {
+export function collectBestAutomations(tree : PatternTreeStorage, storage : AutomationsStorage, nodeID : PatternTreeNodeID | undefined, storagedAutomationsCount : number) : [AutomationSetID, Automation[]] {
     if (nodeID === undefined){
         nodeID = tree.rootPatternTreeNode
         console.log("start collecting automations. tree: ", tree)
@@ -101,27 +111,20 @@ export function collectBestAutomations(tree : PatternTreeStorage, storage : Auto
     if (node === undefined) 
         throw Error(`Wrong pattern tree storage struct: wrong ref ${nodeID}`)
     else{
-        let childs : [PatternTreeNodeID, AutomationSetID][] = []
+        let childs : [PatternTreeNodeID, [AutomationSetID, Automation[]]][] = []
         for(let [strTraits, childID] of Object.entries(node.consequences)) {
             if (childID !== undefined) {
-                childs.push([childID, collectBestAutomations(tree, storage, childID)])
+                childs.push([childID, collectBestAutomations(tree, storage, childID, storagedAutomationsCount)])
             }
         }
-        let nodeEnterCount = node.increment?.enterCount 
-        if ((nodeEnterCount === undefined) || (nodeEnterCount === 0)) {
-            nodeEnterCount = 0
-            for (let [childID, childAutoID] of childs) {
-                nodeEnterCount = tree[childID]!.increment!.enterCount
-            }
-        }
-        for(let [childID, childAutoID] of childs) {
+        for(let [childID, [_, childAutomations]] of childs) {
             let childNode = tree[childID] !!
-            if (childNode.increment!.enterCount !== 0) {
-                for (let automation of storage[childAutoID] !!) {
+            if (childNode.increment!.probabilityMetric !== 0) {
+                for (let automation of childAutomations) {
                     automations.push(
                         {
                             lastNode : automation.lastNode,
-                            chanseMetric : automation.chanseMetric * childNode.increment!.enterCount / nodeEnterCount,
+                            chanseMetric : automation.chanseMetric,
                             lenght : automation.lenght + 1
                         }
                     )
@@ -129,7 +132,7 @@ export function collectBestAutomations(tree : PatternTreeStorage, storage : Auto
                 automations.push(
                     {
                         lastNode : childID,
-                        chanseMetric : childNode.increment!.enterCount / nodeEnterCount,
+                        chanseMetric : childNode.increment!.probabilityMetric,
                         lenght : 1
                     }
                 )
@@ -139,7 +142,7 @@ export function collectBestAutomations(tree : PatternTreeStorage, storage : Auto
             (a, b) => a.chanseMetric * a.lenght - b.chanseMetric * b.lenght
         )
         console.log("automations: ", automations)
-        storage[getAutomationSetID(nodeID)] = automations
-        return getAutomationSetID(nodeID)
+        storage[getAutomationSetID(nodeID)] = automations.slice(-storagedAutomationsCount)
+        return [getAutomationSetID(nodeID), automations]
     }
 }

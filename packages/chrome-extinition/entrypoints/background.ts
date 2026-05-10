@@ -1,8 +1,9 @@
 import { Message } from "@/lib/messages";
-import { asAutomationSetID, asPatternTreeNodeID, collectBestAutomations, createPatternTreeFromData, getConsequenceOfNode, PatternTreeNodeID, PatternTreeStorage } from "@/lib/pattern-tree";
+import { asAutomationSetID, asPatternTreeNodeID, Automation, collectBestAutomations, createPatternTreeFromData, getAutomationSetID, getConsequenceOfNode, PatternTreeNodeID, PatternTreeStorage } from "@/lib/pattern-tree";
 import { ActionInfo } from "@/lib/actions";
 import { PullDataAns, PullDataReq, PushDataAns, PushDataReq } from "@chrome-patterns/shared/requests-data";
 import { RuntimeState } from "@/lib/runtime-state";
+import { StrictTraitsSet } from "@chrome-patterns/shared/actions";
 
 const AUTOMATIONS_COUNT = 4
 
@@ -40,6 +41,47 @@ async function clearPatternTreeAndAutomations() {
   await browser.storage.session.remove<RuntimeState>(toRemove)
 }
 
+async function getSortedAutomations() : Promise<(Automation & {baseNode : PatternTreeNodeID})[]> {
+  let {
+    cursors, 
+    probabilityMetricOfFullVariety
+  } = (await readRuntimeState(['cursors', 'probabilityMetricOfFullVariety'])) !!
+  let automations : (Automation & {baseNode : PatternTreeNodeID})[] = []
+  for(let curs of cursors) {
+    if (curs !== null) {
+      const autoID = getAutomationSetID(curs)
+      let automationsSubset = (await readRuntimeState([autoID]))!![autoID]!!
+      let node = (await readRuntimeState([curs]))!![curs] !!
+      for (let auto of automationsSubset) {
+        automations.push(
+          {
+            lastNode : auto.lastNode,
+            lenght : auto.lenght,
+            chanseMetric : auto.chanseMetric / (
+              node.increment?.probabilityMetric ?? probabilityMetricOfFullVariety
+            ),
+            baseNode : curs
+          }
+        )
+      }
+    }
+  }
+  automations.sort(
+    (a, b) => a.chanseMetric * a.lenght - b.chanseMetric * b.lenght
+  )
+  return automations
+}
+
+async function automationToActionList(automation : {baseNode : PatternTreeNodeID, lastNode : PatternTreeNodeID}) : Promise<StrictTraitsSet[]> {
+  if (automation.baseNode === automation.lastNode) return []
+  else {
+    let lastNode = (await readRuntimeState([automation.lastNode])) !! [automation.lastNode] !!
+    let pref = await automationToActionList({baseNode : automation.baseNode, lastNode : lastNode.increment!.parentID})
+    pref.push(lastNode.increment!.lastActionTraits)
+    return pref
+  }
+}
+
 async function shiftCursors(action : ActionInfo) {
   let {cursors, rootPatternTreeNode} = (await readRuntimeState(['cursors', 'rootPatternTreeNode'])) !!
   for (let cursor_i = cursors.length - 2; cursor_i >= 0; cursor_i --) {
@@ -51,6 +93,23 @@ async function shiftCursors(action : ActionInfo) {
   }
   cursors[0] = rootPatternTreeNode
   await writeRuntimeState({cursors : cursors})
+  let automations = await Promise.all(
+    (await getSortedAutomations())
+      .slice(-AUTOMATIONS_COUNT)
+      .map(automationToActionList)
+  )
+    
+  let message : Message = {
+    type : 'automations_update',
+    automations : automations
+  }
+  for (let tab of await browser.tabs.query({})) {
+    if (tab.id !== undefined)
+      browser.tabs.sendMessage(
+        tab.id,
+        message
+      )
+  }
 }
 
 export default defineBackground(() => {
@@ -67,7 +126,7 @@ export default defineBackground(() => {
           }
         )
         let automations = {}
-        collectBestAutomations(tree, automations, undefined)
+        collectBestAutomations(tree, automations, undefined, AUTOMATIONS_COUNT)
         let settings : Partial<RuntimeState> = {
           runtimeStateInited : true,
           maxPatternLenght : 12,
@@ -210,7 +269,7 @@ export default defineBackground(() => {
                     }
                     let tree = createPatternTreeFromData(ans.tree)
                     let automations = {}
-                    collectBestAutomations(tree, automations, undefined)
+                    collectBestAutomations(tree, automations, undefined, AUTOMATIONS_COUNT)
                     let settings : Partial<RuntimeState> = {
                       maxPatternLenght : ans.settings.maxPatternLenght,
                       cursors : new Array<PatternTreeNodeID|null>(ans.settings.maxPatternLenght).fill(null)

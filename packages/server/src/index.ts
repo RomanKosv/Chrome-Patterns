@@ -13,7 +13,7 @@ const pool : DBPool = new DBPool(
     {
         user: 'postgres',
         host: 'localhost',
-        database: 'ChromePatterns',
+        database: 'Chrome-Patterns',
         password: 'test123',
         port: 5432
     }

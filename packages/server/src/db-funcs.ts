@@ -110,11 +110,16 @@ export async function tryCreateUser(username: string, pool : DBPool) : Promise<U
     ).rows[0]
 }
 
-export async function getPatternTree(userID : number, pool : DBPool, currentNodeID : number |null = null) : Promise<PatternTreeData> {
+export async function getPatternTree(userID : number, pool : DBPool, currentNodeID : number |null = null, probabilityCoef : number = 1) : Promise<PatternTreeData> {
     const childs = (
-        await pool.query<PatternTreeNode>(
+        await pool.query<PatternTreeNode & {essential_enter_count : number}>(
             `
-            select * from pattern_tree_nodes
+            select *,
+                (
+                    select count(action_id) from pattern_tree_nodes_actions
+                        where user_id = $1 and node_id = id
+                ) as essential_enter_count
+                from pattern_tree_nodes
                 where user_id = $1 and (parent_id is not distinct from $2)
             `,
             [userID, currentNodeID]
@@ -122,13 +127,19 @@ export async function getPatternTree(userID : number, pool : DBPool, currentNode
     ).rows
     const childData : PatternConsquense[] = []
     for (const cons of childs) {
-        childData.push(
-            {
-                node : await getPatternTree(userID, pool, cons.id),
-                traits : cons.strict_traits,
-                enterCount : cons.enter_count
-            }
-        )
+        if (cons.essential_enter_count !== 0)
+            childData.push(
+                {
+                    node : await getPatternTree(
+                        userID, 
+                        pool, 
+                        cons.id, 
+                        probabilityCoef * (cons.essential_enter_count / cons.enter_count)
+                    ),
+                    traits : cons.strict_traits,
+                    probabilityMetric : cons.essential_enter_count * probabilityCoef
+                }
+            )
     }
     return {
         consequences : childData

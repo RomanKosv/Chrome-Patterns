@@ -27,20 +27,20 @@ input[type="image"],
 `
 
 export function getStrictTraitsFrom(action : RealtimeAction) : TraitSet {
-    let tagName : string | undefined
-    let text : string | undefined
+    let control
     if (action.event.target instanceof Element) {
         let button = action.event.target.closest(clickacle_CSS_Selector)
         if (button !== null) {
-            tagName = button.tagName
-            text = button.textContent
+            control = {
+                tagName : button.tagName,
+                text : button.textContent
+            }
         }
     }
     return {
         actionType : action.actionType,
         pageLocation : action.window.location.hostname + action.window.location.pathname,
-        controlElementTagName : tagName,
-        controlElementText : text
+        controlElement : control
     }
 }
 
@@ -54,7 +54,7 @@ export function toActionInfo(action : RealtimeAction) : ActionInfo {
 
 function isEssentialActionTraits(traits : TraitSet) : boolean {
     return traits.actionType !== undefined 
-        && traits.controlElementTagName !== undefined
+        && traits.controlElement !== undefined
 }
 
 export function isEsentialAction(action : ActionInfo) : boolean {
