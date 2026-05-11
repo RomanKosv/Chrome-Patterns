@@ -101,6 +101,10 @@ export function getAutomationSetID(node : PatternTreeNodeID) : AutomationSetID {
     return `automation for ${node}`
 }
 
+export function automationCost(automation : Automation) : number {
+    return automation.lenght * automation.chanseMetric * (0.9 ** automation.lenght)
+}
+
 export function collectBestAutomations(tree : PatternTreeStorage, storage : AutomationsStorage, nodeID : PatternTreeNodeID | undefined, storagedAutomationsCount : number) : [AutomationSetID, Automation[]] {
     if (nodeID === undefined){
         nodeID = tree.rootPatternTreeNode
@@ -139,7 +143,7 @@ export function collectBestAutomations(tree : PatternTreeStorage, storage : Auto
             }
         }
         automations.sort(
-            (a, b) => a.chanseMetric * a.lenght - b.chanseMetric * b.lenght
+            (a, b) => automationCost(a) - automationCost(b)
         )
         console.log("automations: ", automations)
         storage[getAutomationSetID(nodeID)] = automations.slice(-storagedAutomationsCount)

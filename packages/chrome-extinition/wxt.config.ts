@@ -7,13 +7,16 @@ export default defineConfig(
             host_permissions: [
             "http://localhost:3006/*" 
             ],
-            permissions : ['alarms', 'storage', 'tabs'],
+            permissions : ['alarms', 'storage', 'tabs', 'sidePanel'],
             web_accessible_resources: [
                 {
                     resources: ["images/*.png"], // путь к вашим картинкам
                     matches: ["<all_urls>"]
                 }
-            ]
+            ],
+            side_panel : {
+                default_path : 'sidepanel/index.html'
+            }
         }
     }
 );

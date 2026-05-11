@@ -1,16 +1,17 @@
 import { Message } from "@/lib/messages";
-import { asAutomationSetID, asPatternTreeNodeID, Automation, collectBestAutomations, createPatternTreeFromData, getAutomationSetID, getConsequenceOfNode, PatternTreeNodeID, PatternTreeStorage } from "@/lib/pattern-tree";
+import { asAutomationSetID, asPatternTreeNodeID, Automation, automationCost, collectBestAutomations, createPatternTreeFromData, getAutomationSetID, getConsequenceOfNode, PatternTreeNodeID, PatternTreeStorage } from "@/lib/pattern-tree";
 import { ActionInfo } from "@/lib/actions";
 import { PullDataAns, PullDataReq, PushDataAns, PushDataReq } from "@chrome-patterns/shared/requests-data";
 import { RuntimeState } from "@/lib/runtime-state";
 import { StrictTraitsSet } from "@chrome-patterns/shared/actions";
+import stringify from "fast-json-stable-stringify";
 
-const AUTOMATIONS_COUNT = 4
+const AUTOMATIONS_COUNT = 10
 
 let stateInteractQueue = Promise.resolve();
 
 async function readRuntimeState<Key extends keyof RuntimeState>(fields : Key[]) : Promise<undefined | Pick<RuntimeState, Key>> {
-  console.log("fields to read: ", fields)
+  // console.log("fields to read: ", fields)
   let isInited = (await browser.storage.session.get<{runtimeStateInited : true | undefined}>('runtimeStateInited')).runtimeStateInited
   if (isInited === true) {
     return await browser.storage.session.get<Pick<RuntimeState, Key>>(fields)
@@ -19,9 +20,9 @@ async function readRuntimeState<Key extends keyof RuntimeState>(fields : Key[]) 
 }
 
 async function writeRuntimeState(changes : Partial<RuntimeState>) {
-  console.log("writes changes: ", changes)
+  // console.log("writes changes: ", changes)
   await browser.storage.session.set(changes)
-  console.log("storage state: ", await browser.storage.session.get(null))
+  // console.log("storage state: ", await browser.storage.session.get(null))
 }
 
 async function clearPatternTreeAndAutomations() {
@@ -47,7 +48,7 @@ async function getSortedAutomations() : Promise<(Automation & {baseNode : Patter
     probabilityMetricOfFullVariety
   } = (await readRuntimeState(['cursors', 'probabilityMetricOfFullVariety'])) !!
   let automations : (Automation & {baseNode : PatternTreeNodeID})[] = []
-  for(let curs of cursors) {
+  for(let curs of cursors.slice(1)) {
     if (curs !== null) {
       const autoID = getAutomationSetID(curs)
       let automationsSubset = (await readRuntimeState([autoID]))!![autoID]!!
@@ -67,7 +68,7 @@ async function getSortedAutomations() : Promise<(Automation & {baseNode : Patter
     }
   }
   automations.sort(
-    (a, b) => a.chanseMetric * a.lenght - b.chanseMetric * b.lenght
+    (a, b) => automationCost(a) - automationCost(b)
   )
   return automations
 }
@@ -82,6 +83,32 @@ async function automationToActionList(automation : {baseNode : PatternTreeNodeID
   }
 }
 
+async function sendAutomations() {
+  let automations : StrictTraitsSet[][] = []
+  let automationsSet = new Map<string, true>()
+  for (const auto of (await getSortedAutomations()).toReversed()) {
+    if (automationsSet.size >= AUTOMATIONS_COUNT) break;
+    let actions = await automationToActionList(auto)
+    let key = stringify(actions)
+    if (!automationsSet.has(key)) {
+      automations.push(actions)
+      automationsSet.set(key, true)
+    }
+  }
+  let message : Message = {
+    type : 'automations_update',
+    automations : automations
+  }
+  try{
+    await browser.runtime.sendMessage(
+      message
+    )
+  }
+  catch(e) {
+    console.error('error on sending message to page: ', e)
+  }
+}
+
 async function shiftCursors(action : ActionInfo) {
   let {cursors, rootPatternTreeNode} = (await readRuntimeState(['cursors', 'rootPatternTreeNode'])) !!
   for (let cursor_i = cursors.length - 2; cursor_i >= 0; cursor_i --) {
@@ -93,28 +120,15 @@ async function shiftCursors(action : ActionInfo) {
   }
   cursors[0] = rootPatternTreeNode
   await writeRuntimeState({cursors : cursors})
-  let automations = await Promise.all(
-    (await getSortedAutomations())
-      .slice(-AUTOMATIONS_COUNT)
-      .map(automationToActionList)
-  )
-    
-  let message : Message = {
-    type : 'automations_update',
-    automations : automations
-  }
-  for (let tab of await browser.tabs.query({})) {
-    if (tab.id !== undefined)
-      browser.tabs.sendMessage(
-        tab.id,
-        message
-      )
-  }
 }
 
 export default defineBackground(() => {
   console.log('Hello background!', { id: browser.runtime.id });
   
+  browser.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((error) => console.error(error))
+
   stateInteractQueue = stateInteractQueue.then(
     async () => {
       let state = await readRuntimeState([])
@@ -150,6 +164,7 @@ export default defineBackground(() => {
         let action = message.action
         stateInteractQueue = stateInteractQueue.then(
           async () => {
+            sendResponse('background got message');
             let state = await readRuntimeState(['localActionsList'])
             if (state !== undefined) {
               state.localActionsList.push(action)
@@ -159,9 +174,10 @@ export default defineBackground(() => {
                   localActionsList : state.localActionsList
                 }
               )
+              console.log('sending automations')
+              await sendAutomations()
             }
             else console.log("state not inited yet")
-            sendResponse('background got message');
           }
         )
       }
@@ -264,9 +280,6 @@ export default defineBackground(() => {
                     console.error("some error on server side (pull data)")
                   }
                   else {
-                    let changes = {
-
-                    }
                     let tree = createPatternTreeFromData(ans.tree)
                     let automations = {}
                     collectBestAutomations(tree, automations, undefined, AUTOMATIONS_COUNT)
