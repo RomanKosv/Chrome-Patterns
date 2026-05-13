@@ -1,9 +1,9 @@
 import { Message } from "@/lib/messages";
 import { asAutomationSetID, asPatternTreeNodeID, Automation, automationCost, collectBestAutomations, createPatternTreeFromData, getAutomationSetID, getConsequenceOfNode, PatternTreeNodeID, PatternTreeStorage } from "@/lib/pattern-tree";
-import { ActionInfo } from "@/lib/actions";
+import { ContextualActionInfo, StandaloneActionInfo } from "@/lib/actions";
 import { PullDataAns, PullDataReq, PushDataAns, PushDataReq } from "@chrome-patterns/shared/requests-data";
 import { RuntimeState } from "@/lib/runtime-state";
-import { StrictTraitsSet } from "@chrome-patterns/shared/actions";
+import { catPageOpenTime, StrictTraitsSet } from "@chrome-patterns/shared/actions";
 import stringify from "fast-json-stable-stringify";
 
 const AUTOMATIONS_COUNT = 10
@@ -109,9 +109,13 @@ async function sendAutomations() {
   }
 }
 
-async function shiftCursors(action : ActionInfo) {
+async function shiftCursors(action_ : ContextualActionInfo) {
   let {cursors, rootPatternTreeNode} = (await readRuntimeState(['cursors', 'rootPatternTreeNode'])) !!
   for (let cursor_i = cursors.length - 2; cursor_i >= 0; cursor_i --) {
+    let action = {
+      ...action_,
+      strictTraits : catPageOpenTime(action_.strictTraits, cursor_i - 1)
+    }
     let curr = cursors[cursor_i]
     if (curr !== null) {
       let node = (await readRuntimeState([curr])) !! [curr]
@@ -144,7 +148,7 @@ export default defineBackground(() => {
         let settings : Partial<RuntimeState> = {
           runtimeStateInited : true,
           maxPatternLenght : 12,
-          username : "test_user_5",
+          username : "test_user_14",
           cursors : new Array(12).fill(null),
           localActionsList : [],
           sendedActionsPrefixLenght : 0
@@ -167,8 +171,24 @@ export default defineBackground(() => {
             sendResponse('background got message');
             let state = await readRuntimeState(['localActionsList'])
             if (state !== undefined) {
-              state.localActionsList.push(action)
-              await shiftCursors(action)
+              let minPageCreationN = 0;
+              let maxPageCreationN = state.localActionsList.length
+              while (maxPageCreationN - minPageCreationN > 0) {
+                let n = Math.floor((minPageCreationN + maxPageCreationN) / 2)
+                if (state.localActionsList[n]!!.time <= message.pageCreationTime)
+                  minPageCreationN = n+1
+                else
+                  maxPageCreationN = n
+              }
+              let contextualAction : ContextualActionInfo = {
+                ...action,
+                strictTraits : {
+                  ...action.strictTraits,
+                  relativePageOpenTime : minPageCreationN > 0 ? state.localActionsList.length - minPageCreationN : null
+                }
+              }
+              state.localActionsList.push(contextualAction)
+              await shiftCursors(contextualAction)
               await writeRuntimeState(
                 {
                   localActionsList : state.localActionsList

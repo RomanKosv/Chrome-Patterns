@@ -1,9 +1,10 @@
 import { StrictTraitsSet } from "@chrome-patterns/shared/actions"
-import { ActionInfo } from "./actions"
+import { StandaloneActionInfo } from "./actions"
 
 export type Message = {
     type : 'page_action',
-    action : ActionInfo
+    action : StandaloneActionInfo,
+    pageCreationTime : Date
 } | {
     type : 'automations_update',
     automations : StrictTraitsSet[][]

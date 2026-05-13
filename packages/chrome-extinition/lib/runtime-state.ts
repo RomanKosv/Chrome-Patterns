@@ -1,4 +1,4 @@
-import { ActionInfo } from "./actions"
+import { ContextualActionInfo } from "./actions"
 import { AutomationsStorage, PatternTreeNodeID, PatternTreeStorage } from "./pattern-tree"
 
 export type RuntimeState = {
@@ -6,6 +6,6 @@ export type RuntimeState = {
     maxPatternLenght : number,
     username : string
     cursors : (PatternTreeNodeID | null)[],
-    localActionsList : ActionInfo[],
+    localActionsList : ContextualActionInfo[],
     sendedActionsPrefixLenght : number
 } & PatternTreeStorage & AutomationsStorage

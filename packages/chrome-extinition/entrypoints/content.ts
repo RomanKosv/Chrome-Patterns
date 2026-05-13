@@ -7,6 +7,7 @@ export default defineContentScript({
   matches: ['*://*/*'],
   async main(ctx) {
     console.log("content script!")
+    let pageCreationTime = new Date()
     window.addEventListener(
       'click',
       (event) => {
@@ -17,20 +18,24 @@ export default defineContentScript({
               actionType : 'click',
               event : event,
               window : window
-            }
+            },
+            performance.timeOrigin
           ),
-          type : 'page_action'
+          type : 'page_action',
+          pageCreationTime : pageCreationTime
         }
         // if (IsEssentialActionTraitSelector.getFrom(message.action)) {
         //   message.action.tryActivateOn(document);
         // }
-        if (isEsentialAction(message.action))
+        if (isEsentialAction(message.action)){
           browser.runtime.sendMessage(
             message,
             (response) => {
               console.log("Action delivered!");
             }
           )
+          console.log("Senden message: ", message)
+        }
       }
     );
   },

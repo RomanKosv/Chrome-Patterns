@@ -1,4 +1,8 @@
 import {ActionInfo as ActionData} from '@chrome-patterns/shared/actions'
-import { TraitSet } from './traits'
+import { ContextualTraitSet, StandaloneTraitSet } from './traits'
 
-export type ActionInfo = ActionData & {strictTraits : TraitSet}
+export type StandaloneActionInfo = ActionData & {strictTraits : StandaloneTraitSet}
+
+export type ContextualActionInfo = StandaloneActionInfo & {
+    strictTraits : ContextualTraitSet
+}

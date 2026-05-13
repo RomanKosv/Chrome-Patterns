@@ -1,4 +1,4 @@
-import type { ActionInfo } from "@chrome-patterns/shared/actions"
+import { catPageOpenTime, type ActionInfo } from "@chrome-patterns/shared/actions"
 import { createChildNode, getChildNode, insertAction, visitNode } from "./db-funcs.js";
 import { Pool as DBPool } from 'pg';
 import type { UserSettings } from "@chrome-patterns/shared/user";
@@ -9,7 +9,8 @@ export async function readActionStream(actions : Iterable<ActionInfo>, actionsPr
         for(let curs_i = 0; curs_i < cursors.length; curs_i++) {
             let c = cursors[curs_i]
             if (c !== undefined) {
-                let c1 = (await getChildNode(userID, c, actionInfo.strictTraits, pool))?.id
+                let contexualTraits = catPageOpenTime(actionInfo.strictTraits, cursors.length - 1 - curs_i - 1)
+                let c1 = (await getChildNode(userID, c, contexualTraits, pool))?.id
                 cursors[curs_i] = c1
             }
         }
@@ -23,9 +24,10 @@ export async function readActionStream(actions : Iterable<ActionInfo>, actionsPr
         for(let curs_i = 0; curs_i < cursors.length; curs_i++) {
             let c = cursors[curs_i]
             if (c !== undefined) {
-                let c1 = (await getChildNode(userID, c, actionInfo.strictTraits, pool))?.id
+                let contexualTraits = catPageOpenTime(actionInfo.strictTraits, cursors.length - 1 - curs_i - 1)
+                let c1 = (await getChildNode(userID, c, contexualTraits, pool))?.id
                 if (c1 === undefined) {
-                    c1 = (await createChildNode(userID, c, actionInfo.strictTraits, pool))
+                    c1 = (await createChildNode(userID, c, contexualTraits, pool))
                 }
                 await visitNode(userID, c1, action, pool)
                 cursors[curs_i] = c1

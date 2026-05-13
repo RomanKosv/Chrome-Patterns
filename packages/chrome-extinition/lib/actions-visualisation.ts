@@ -1,5 +1,5 @@
 import { StrictTraitsSet } from "@chrome-patterns/shared/actions";
-import { isCorrectTraitSet, TraitSet } from "./traits";
+import { isCorrectTraitSet, StandaloneTraitSet } from "./traits";
 import unknownIconURL from '/images/unknown.png'
 import { PublicPath } from "wxt/browser";
 

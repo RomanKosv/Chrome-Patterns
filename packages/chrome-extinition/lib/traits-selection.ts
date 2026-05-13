@@ -1,6 +1,6 @@
 import { RealtimeAction } from "./realtime_actions";
-import { TraitSet } from "./traits";
-import { ActionInfo } from "./actions";
+import { StandaloneTraitSet } from "./traits";
+import { StandaloneActionInfo } from "./actions";
 
 interface TraitSelector<TraitName = string> {
     get traitName() : TraitName,
@@ -26,7 +26,7 @@ input[type="image"],
 [tabindex]:not([tabindex='-1'])
 `
 
-export function getStrictTraitsFrom(action : RealtimeAction) : TraitSet {
+export function getStrictTraitsFrom(action : RealtimeAction) : StandaloneTraitSet {
     let control
     if (action.event.target instanceof Element) {
         let button = action.event.target.closest(clickacle_CSS_Selector)
@@ -44,19 +44,19 @@ export function getStrictTraitsFrom(action : RealtimeAction) : TraitSet {
     }
 }
 
-export function toActionInfo(action : RealtimeAction) : ActionInfo {
+export function toActionInfo(action : RealtimeAction, timeOrigin : number) : StandaloneActionInfo {
     return {
         page : action.window.location.hostname + action.window.location.pathname,
-        time : new Date(action.event.timeStamp),
+        time : new Date(action.event.timeStamp + timeOrigin),
         strictTraits : getStrictTraitsFrom(action)
     }
 }
 
-function isEssentialActionTraits(traits : TraitSet) : boolean {
+function isEssentialActionTraits(traits : StandaloneTraitSet) : boolean {
     return traits.actionType !== undefined 
         && traits.controlElement !== undefined
 }
 
-export function isEsentialAction(action : ActionInfo) : boolean {
+export function isEsentialAction(action : StandaloneActionInfo) : boolean {
     return isEssentialActionTraits(action.strictTraits)
 }

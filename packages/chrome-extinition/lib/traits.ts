@@ -1,6 +1,6 @@
 import { StrictTraitsSet } from "@chrome-patterns/shared/actions"
 
-export type TraitSet = StrictTraitsSet & (
+export type StandaloneTraitSet = StrictTraitsSet & (
     (
         {
             actionType : 'click',
@@ -13,7 +13,7 @@ export type TraitSet = StrictTraitsSet & (
     )
 )
 
-export function isCorrectTraitSet(traits : StrictTraitsSet) : traits is TraitSet {
+export function isCorrectTraitSet(traits : StrictTraitsSet) : traits is StandaloneTraitSet {
     if (
         (typeof traits == 'object')
         && (traits !== null)
@@ -42,3 +42,6 @@ export function isCorrectTraitSet(traits : StrictTraitsSet) : traits is TraitSet
     else return false
 }
 
+export type ContextualTraitSet = StandaloneTraitSet & {
+    relativePageOpenTime : number | null
+}
