@@ -26,7 +26,7 @@ input[type="image"],
 [tabindex]:not([tabindex='-1'])
 `
 
-export function getStrictTraitsFrom(action : RealtimeAction) : StandaloneTraitSet {
+export function getStrictTraitsFrom(action : RealtimeAction) : StandaloneTraitSet | undefined {
     let control
     if (action.event.target instanceof Element) {
         let button = action.event.target.closest(clickacle_CSS_Selector)
@@ -37,26 +37,18 @@ export function getStrictTraitsFrom(action : RealtimeAction) : StandaloneTraitSe
             }
         }
     }
-    return {
+    return control ? {
         actionType : action.actionType,
         pageLocation : action.window.location.hostname + action.window.location.pathname,
         controlElement : control
-    }
+    } : undefined
 }
 
-export function toActionInfo(action : RealtimeAction, timeOrigin : number) : StandaloneActionInfo {
-    return {
+export function toActionInfo(action : RealtimeAction, timeOrigin : number) : StandaloneActionInfo | undefined {
+    const traits = getStrictTraitsFrom(action)
+    return traits ? {
         page : action.window.location.hostname + action.window.location.pathname,
         time : new Date(action.event.timeStamp + timeOrigin),
-        strictTraits : getStrictTraitsFrom(action)
-    }
-}
-
-function isEssentialActionTraits(traits : StandaloneTraitSet) : boolean {
-    return traits.actionType !== undefined 
-        && traits.controlElement !== undefined
-}
-
-export function isEsentialAction(action : StandaloneActionInfo) : boolean {
-    return isEssentialActionTraits(action.strictTraits)
+        strictTraits : traits
+    } : undefined
 }

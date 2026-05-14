@@ -1,6 +1,6 @@
 import { getVisualisationElementOfAutomatisation } from "@/lib/actions-visualisation";
 import { Message } from "@/lib/messages";
-import { isEsentialAction, toActionInfo } from "@/lib/traits-selection";
+import { toActionInfo } from "@/lib/traits-selection";
 
 
 export default defineContentScript({
@@ -12,22 +12,20 @@ export default defineContentScript({
       'click',
       (event) => {
         console.log('Пользователь кликнул на:', event.target);
-        const message : Message = {
-          action : toActionInfo(
-            {
-              actionType : 'click',
-              event : event,
-              window : window
-            },
-            performance.timeOrigin
-          ),
-          type : 'page_action',
-          pageCreationTime : pageCreationTime
-        }
-        // if (IsEssentialActionTraitSelector.getFrom(message.action)) {
-        //   message.action.tryActivateOn(document);
-        // }
-        if (isEsentialAction(message.action)){
+        const action = toActionInfo(
+          {
+            actionType : 'click',
+            event : event,
+            window : window
+          },
+          performance.timeOrigin
+        )
+        if (action !== undefined) {
+          const message : Message = {
+            action : action,
+            type : 'page_action',
+            pageCreationTime : pageCreationTime
+          }
           browser.runtime.sendMessage(
             message,
             (response) => {
@@ -38,5 +36,28 @@ export default defineContentScript({
         }
       }
     );
+    browser.runtime.onMessage.addListener(
+      (message_, sender, sendResponse) => {
+        const message : Message = message_
+        if (message.type === 'action_preforming_reqest') {
+          if (message.action.actionType == 'click') {
+            const xPath = `//${message.action.controlElement.tagName}[.="${message.action.controlElement.text}"]`
+            let control = document.evaluate(xPath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue
+            if (control instanceof HTMLElement) {
+              control.click()
+              sendResponse(true)
+              console.log("found and clicked, action: ", message.action)
+            }
+            else{
+              sendResponse(false)
+              console.error("control not found, action: ", message.action)
+            }
+          }
+          else {
+            const no : never = message.action.actionType
+          }
+        }
+      }
+    )
   },
 });

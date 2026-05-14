@@ -5,8 +5,9 @@ import { PullDataAns, PullDataReq, PushDataAns, PushDataReq } from "@chrome-patt
 import { RuntimeState } from "@/lib/runtime-state";
 import { catPageOpenTime, StrictTraitsSet } from "@chrome-patterns/shared/actions";
 import stringify from "fast-json-stable-stringify";
+import { asContextualTraitSet, ContextualTraitSet, isCorrectTraitSet, StandaloneTraitSet } from "@/lib/traits";
 
-const AUTOMATIONS_COUNT = 10
+const AUTOMATIONS_COUNT = 30
 
 let stateInteractQueue = Promise.resolve();
 
@@ -48,7 +49,7 @@ async function getSortedAutomations() : Promise<(Automation & {baseNode : Patter
     probabilityMetricOfFullVariety
   } = (await readRuntimeState(['cursors', 'probabilityMetricOfFullVariety'])) !!
   let automations : (Automation & {baseNode : PatternTreeNodeID})[] = []
-  for(let curs of cursors.slice(1)) {
+  for(let curs of cursors) {
     if (curs !== null) {
       const autoID = getAutomationSetID(curs)
       let automationsSubset = (await readRuntimeState([autoID]))!![autoID]!!
@@ -84,14 +85,14 @@ async function automationToActionList(automation : {baseNode : PatternTreeNodeID
 }
 
 async function sendAutomations() {
-  let automations : StrictTraitsSet[][] = []
+  let automations : ContextualTraitSet[][] = []
   let automationsSet = new Map<string, true>()
   for (const auto of (await getSortedAutomations()).toReversed()) {
     if (automationsSet.size >= AUTOMATIONS_COUNT) break;
     let actions = await automationToActionList(auto)
     let key = stringify(actions)
-    if (!automationsSet.has(key)) {
-      automations.push(actions)
+    if ((!automationsSet.has(key)) && (actions.every(isCorrectTraitSet))) {
+      automations.push(actions.map(asContextualTraitSet))
       automationsSet.set(key, true)
     }
   }
@@ -124,6 +125,53 @@ async function shiftCursors(action_ : ContextualActionInfo) {
   }
   cursors[0] = rootPatternTreeNode
   await writeRuntimeState({cursors : cursors})
+}
+
+async function tryRunAction(action : StandaloneTraitSet) : Promise<boolean> {
+  if (action.actionType === 'click') {
+    const tabs = (await browser.tabs.query({})).filter(
+      tab => {
+        if (tab.url !== undefined){
+          try{
+            const url = new URL(tab.url)
+            return (url.host + url.pathname) === action.pageLocation
+          }
+          catch {
+            return false
+          }
+        }
+        else
+          return false
+      }
+    )
+    for(const tab of tabs) {
+      if (tab.id !== undefined) {
+        const message : Message = {
+          type : 'action_preforming_reqest',
+          action : action
+        }
+        try {
+          const done = await browser.tabs.sendMessage(tab.id, message)
+          if (done)
+            return true
+        }
+        catch (e){
+          console.error("error on sending reqest on action preforming: ", e)
+        }
+      }
+    }
+    return false
+  }
+  const no : never = action.actionType
+  return no;
+}
+
+async function runAutomation(actions : StandaloneTraitSet[]) : Promise<boolean> {
+  for(const action of actions) {
+    if (! (await tryRunAction(action)))
+      return false
+  }
+  return true
 }
 
 export default defineBackground(() => {
@@ -315,6 +363,7 @@ export default defineBackground(() => {
                     for (let i = Math.max(0, state.localActionsList.length - settings.maxPatternLenght!!); i < state.localActionsList.length; i++) {
                       await shiftCursors(state.localActionsList[i])
                     }
+                    await sendAutomations()
                     console.log("succesful pull")
                   }
                 }

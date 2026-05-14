@@ -4,9 +4,9 @@ import unknownIconURL from '/images/unknown.png'
 import { PublicPath } from "wxt/browser";
 
 export function getVisualisationElementOfAction(
-    traits : StrictTraitsSet, document : Document, width : `${number}${'px' | '%'}`, height : `${number}${'px' | '%'}`
+    traits : StandaloneTraitSet, document : Document, width : `${number}${'px' | '%'}`, height : `${number}${'px' | '%'}`
 ) : HTMLElement {
-    if (isCorrectTraitSet(traits) && (traits.actionType === 'click')) {
+    if ((traits.actionType === 'click')) {
         try {
             const wrapper = document.createElement('div');
             wrapper.style.display = 'inline-flex';
@@ -23,19 +23,11 @@ export function getVisualisationElementOfAction(
             label.style.width = '95%'
             label.style.overflow = 'hidden'
             const controlHeightPercent = 100 - labelHeightPercents
-            let el
-            if (traits.controlElement !== undefined) {
-                el = document.createElement(traits.controlElement.tagName)
-                el.textContent = traits.controlElement.text
-                el.style.fontSize = `clamp(${controlHeightPercent / 3}cqh, ${100 / (el.textContent.length + 1)}cqw, ${controlHeightPercent}cqh)`
-                el.style.textAlign = 'center'
-                console.log('control element defined on trait set ', traits)
-            }
-            else {
-                console.log('control element undefined on trait set ', traits)
-                el = document.createElement('img')
-                el.src = browser.runtime.getURL(unknownIconURL as PublicPath)
-            }
+            let el = document.createElement(traits.controlElement.tagName)
+            el.textContent = traits.controlElement.text
+            el.style.fontSize = `clamp(${controlHeightPercent / 3}cqh, ${100 / (el.textContent.length + 1)}cqw, ${controlHeightPercent}cqh)`
+            el.style.textAlign = 'center'
+            console.log('control element defined on trait set ', traits)
             el.style.width = '95%'
             el.style.height = `${controlHeightPercent}%`
             el.style.borderWidth = '2px'
@@ -61,11 +53,15 @@ export function getVisualisationElementOfAction(
 }
 
 export function getVisualisationElementOfAutomatisation(
-    actions : Iterable<StrictTraitsSet>, document : Document, actionIconWidth : `${number}${'px' | '%'}`, actionIconHeight : `${number}${'px' | '%'}`
+    actions : Iterable<StandaloneTraitSet>, document : Document, actionIconWidth : `${number}${'px' | '%'}`, actionIconHeight : `${number}${'px' | '%'}`
 ) : HTMLElement {
     let list = document.createElement('div')
     list.style.display = 'inline-flex'
     list.style.flexDirection = 'row'
+    list.style.borderWidth = '2px'
+    list.style.borderRadius = '5px'
+    list.style.borderColor = 'yellow'
+    list.style.borderStyle = 'solid'
     for(let action of actions) 
         list.append(getVisualisationElementOfAction(action, document, actionIconWidth, actionIconHeight))
     return list

@@ -1,11 +1,11 @@
-import { StrictTraitsSet } from "@chrome-patterns/shared/actions"
+import { StrictTraitsSet, tryGetPageOpenTime } from "@chrome-patterns/shared/actions"
 
 export type StandaloneTraitSet = StrictTraitsSet & (
     (
         {
             actionType : 'click',
             pageLocation : string,
-            controlElement? : {
+            controlElement : {
                 tagName : string
                 text : string
             }
@@ -22,11 +22,8 @@ export function isCorrectTraitSet(traits : StrictTraitsSet) : traits is Standalo
         && ('pageLocation' in traits)
         && ((typeof traits.pageLocation) == 'string')
         && (
-            (!('controlElement' in traits))
-            || 
-            (traits.controlElement === undefined)
-            ||
-            (
+            (('controlElement' in traits))
+            && (
                 (typeof traits.controlElement == 'object')
                 && (traits.controlElement !== null)
                 && ('text' in traits.controlElement)
@@ -40,6 +37,13 @@ export function isCorrectTraitSet(traits : StrictTraitsSet) : traits is Standalo
         return true
     }
     else return false
+}
+
+export function asContextualTraitSet(traits : StandaloneTraitSet) : ContextualTraitSet {
+    return {
+        ...traits,
+        relativePageOpenTime : tryGetPageOpenTime(traits)
+    }
 }
 
 export type ContextualTraitSet = StandaloneTraitSet & {
