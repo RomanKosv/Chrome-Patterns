@@ -51,7 +51,7 @@ browser.runtime.onMessage.addListener(
     async (message_, sender, sendResponse) => {
         let message : Message = message_
         if (message.type === 'automations_update') {
-            console.error('got automations: ', message.automations)
+            console.log('got automations: ', message.automations)
             automations = message.automations 
             let elements = message.automations.map(
                 actions => getVisualisationElementOfAutomatisation(actions, document, '80px', '40px')

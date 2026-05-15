@@ -8,6 +8,8 @@ import stringify from "fast-json-stable-stringify";
 import { asContextualTraitSet, ContextualTraitSet, isCorrectTraitSet, StandaloneTraitSet } from "@/lib/traits";
 
 const AUTOMATIONS_COUNT = 30
+const RUN_ACTION_ATTEMPTS = 3
+const SLEEP_AFTER_ACTION_MS = 200
 
 let stateInteractQueue = Promise.resolve();
 
@@ -129,7 +131,7 @@ async function shiftCursors(action_ : ContextualActionInfo) {
 
 async function tryRunAction(action : StandaloneTraitSet) : Promise<boolean> {
   if (action.actionType === 'click') {
-    const tabs = (await browser.tabs.query({})).filter(
+    let tabs = (await browser.tabs.query({})).filter(
       tab => {
         if (tab.url !== undefined){
           try{
@@ -144,20 +146,30 @@ async function tryRunAction(action : StandaloneTraitSet) : Promise<boolean> {
           return false
       }
     )
-    for(const tab of tabs) {
-      if (tab.id !== undefined) {
-        const message : Message = {
-          type : 'action_preforming_reqest',
-          action : action
+    for(let tryInd = 0 ; tryInd < RUN_ACTION_ATTEMPTS; tryInd++) {
+      let tryArain : Browser.tabs.Tab[] = []
+      for(const tab of tabs) {
+        if (tab.id !== undefined) {
+          const message : Message = {
+            type : 'action_preforming_reqest',
+            action : action
+          }
+          try {
+            const done = await browser.tabs.sendMessage(tab.id, message)
+            if (done)
+              return true
+          }
+          catch (e){
+            tryArain.push(tab)
+            console.error("error on sending reqest on action preforming: ", e)
+          }
         }
-        try {
-          const done = await browser.tabs.sendMessage(tab.id, message)
-          if (done)
-            return true
-        }
-        catch (e){
-          console.error("error on sending reqest on action preforming: ", e)
-        }
+      }
+      if (tryArain.length === 0)
+        break;
+      else{
+        tabs = tryArain
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
     }
     return false
@@ -167,9 +179,23 @@ async function tryRunAction(action : StandaloneTraitSet) : Promise<boolean> {
 }
 
 async function runAutomation(actions : StandaloneTraitSet[]) : Promise<boolean> {
-  for(const action of actions) {
+  for(
+    const [action, i] of actions.map<[StandaloneTraitSet, number]>(
+      (a, i) => [a, i]
+    )
+  ) {
+    let inProcessMessage : Message = {
+      type : 'automation_preforming_status_message',
+      status : 'doing_action',
+      actionIndex : i
+    }
+    browser.runtime.sendMessage(
+      inProcessMessage
+    )
     if (! (await tryRunAction(action)))
       return false
+    if (i < actions.length - 1)
+      await new Promise(resolve => setTimeout(resolve, SLEEP_AFTER_ACTION_MS))
   }
   return true
 }
@@ -216,7 +242,6 @@ export default defineBackground(() => {
         let action = message.action
         stateInteractQueue = stateInteractQueue.then(
           async () => {
-            sendResponse('background got message');
             let state = await readRuntimeState(['localActionsList'])
             if (state !== undefined) {
               let minPageCreationN = 0;
@@ -246,10 +271,18 @@ export default defineBackground(() => {
               await sendAutomations()
             }
             else console.log("state not inited yet")
+            sendResponse('background got message');
           }
         )
+        return true;
       }
-      
+      else if (message.type === 'automation_preforming_request') {
+        console.log('start automation preforming')
+        runAutomation(message.automation).then(
+          sendResponse
+        )
+        return true
+      }
     }
   )
 

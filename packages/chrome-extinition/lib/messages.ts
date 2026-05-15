@@ -12,4 +12,11 @@ export type Message = {
 } | {
     type : 'action_preforming_reqest',
     action : StandaloneTraitSet
+} | {
+    type : 'automation_preforming_request',
+    automation : StandaloneTraitSet[]
+} | {
+    type : 'automation_preforming_status_message',
+    status : 'doing_action',
+    actionIndex : number
 }

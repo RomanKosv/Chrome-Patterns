@@ -2,6 +2,7 @@ import { StrictTraitsSet } from "@chrome-patterns/shared/actions";
 import { isCorrectTraitSet, StandaloneTraitSet } from "./traits";
 import unknownIconURL from '/images/unknown.png'
 import { PublicPath } from "wxt/browser";
+import { Message } from "./messages";
 
 export function getVisualisationElementOfAction(
     traits : StandaloneTraitSet, document : Document, width : `${number}${'px' | '%'}`, height : `${number}${'px' | '%'}`
@@ -62,6 +63,11 @@ export function getVisualisationElementOfAutomatisation(
     list.style.borderRadius = '5px'
     list.style.borderColor = 'yellow'
     list.style.borderStyle = 'solid'
+    let automationMessage : Message = {
+        type : 'automation_preforming_request',
+        automation : Array.from(actions)
+    }
+    list.addEventListener('click', () => browser.runtime.sendMessage(automationMessage))
     for(let action of actions) 
         list.append(getVisualisationElementOfAction(action, document, actionIconWidth, actionIconHeight))
     return list
