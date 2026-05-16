@@ -203,6 +203,31 @@ async function runAutomation(actions : StandaloneTraitSet[]) : Promise<boolean> 
 export default defineBackground(() => {
   console.log('Hello background!', { id: browser.runtime.id });
   
+  console.log('getAuth')
+  browser.identity.getAuthToken(
+    {interactive : true},
+    (result) => {
+      console.log('token got!!!!')
+      if (result !== undefined) {
+        console.log('auth result: ', JSON.stringify(result))
+        fetch('http://localhost:3006/test_token', {
+          method : 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({token : result})
+        }).then(
+          () => console.log('test_token answered')
+        )
+      }
+      else {
+        console.error('wrong auth answer');
+        console.log(browser.runtime.lastError)
+        console.log(result)
+      }
+    }
+  )
+
   browser.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => console.error(error))
@@ -287,8 +312,8 @@ export default defineBackground(() => {
   )
 
   browser.runtime.onInstalled.addListener(() => {
-    browser.alarms.create("push_alarm", { periodInMinutes : 0.1 });
-    browser.alarms.create("pull_alarm", { periodInMinutes: 0.1 });
+    browser.alarms.create("push_alarm", { periodInMinutes : 1 });
+    browser.alarms.create("pull_alarm", { periodInMinutes: 1 });
   })
   browser.alarms.onAlarm.addListener(
     (alarm) => {

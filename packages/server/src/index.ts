@@ -7,7 +7,7 @@ import {Pool as DBPool} from 'pg';
 import type { PatternTreeNode } from '@chrome-patterns/shared/pattern-tree';
 import { changeUserSettings, getPatternTree, getUserSettings } from './db-funcs.js';
 import { readActionStream as readActionStream } from './client-server-data-stream-read.js';
-import { request } from 'node:http';
+import { getGoogleID } from './google-auth.js';
 
 const pool : DBPool = new DBPool(
     {
@@ -59,5 +59,11 @@ app.post('/push_data', async (req: Request, res: Response) => {
         res.json(ans)
     }
 });
+
+app.post('/test_token', async (req: Request, res: Response) => {
+    console.log('test_token reqest, body: ', req.body)
+    const id = await getGoogleID(req.body.token)
+    console.log('google id:', id)
+})
 
 app.listen(3006, () => console.log('Server is running on port 3006'));

@@ -25,7 +25,9 @@
   },
   "dependencies": {
     "@chrome-patterns/shared": "^1.0.0",
+    "axios": "^1.16.1",
     "express": "^5.2.1",
+    "google-auth-library": "^10.6.2",
     "pg": "^8.20.0"
   }
 }
