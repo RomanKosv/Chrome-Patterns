@@ -1,8 +1,9 @@
 
 export type UserSettings = {
-    maxPatternLenght : number
+    maxPatternLenght : number,
+    automationsCount : number
 }
 
 export type UserAuthData = {
-    username : string
+    googleOauthToken : string
 }

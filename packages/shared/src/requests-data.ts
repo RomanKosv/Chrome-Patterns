@@ -2,20 +2,23 @@ import type { ActionInfo } from "./actions.js"
 import type { PatternTreeNode } from "./pattern-tree.js"
 import type { UserAuthData, UserSettings } from "./user.js"
 
-export type PullDataReq = {
+export type ReqestWithAuth = {
     auth : UserAuthData
 }
+
+export type AuthFailAns = 'authFailed'
+
+export type PullDataReq = ReqestWithAuth
 
 export type PullDataAns = {
     tree : PatternTreeNode,
     settings : UserSettings
-} | "fail"
+} | "fail" | AuthFailAns
 
 export type PushDataReq = {
-    auth : UserAuthData,
-    settings : UserSettings,
+    settings? : UserSettings,
     actions : ActionInfo[],
     actionsPrefix : ActionInfo[]
-}
+} & ReqestWithAuth
 
-export type PushDataAns = "succes" | "fail"
+export type PushDataAns = "succes" | "fail" | AuthFailAns

@@ -2,31 +2,16 @@ import { Message } from "@/lib/messages";
 import { asAutomationSetID, asPatternTreeNodeID, Automation, automationCost, collectBestAutomations, createPatternTreeFromData, getAutomationSetID, getConsequenceOfNode, PatternTreeNodeID, PatternTreeStorage } from "@/lib/pattern-tree";
 import { ContextualActionInfo, StandaloneActionInfo } from "@/lib/actions";
 import { PullDataAns, PullDataReq, PushDataAns, PushDataReq } from "@chrome-patterns/shared/requests-data";
-import { RuntimeState } from "@/lib/runtime-state";
+import { readRuntimeState, RuntimePatternsState, RuntimeSettings, RuntimeState, writeRuntimeState } from "@/lib/runtime-state";
 import { catPageOpenTime, StrictTraitsSet } from "@chrome-patterns/shared/actions";
 import stringify from "fast-json-stable-stringify";
 import { asContextualTraitSet, ContextualTraitSet, isCorrectTraitSet, StandaloneTraitSet } from "@/lib/traits";
 
-const AUTOMATIONS_COUNT = 30
 const RUN_ACTION_ATTEMPTS = 3
 const SLEEP_AFTER_ACTION_MS = 200
 
 let stateInteractQueue = Promise.resolve();
 
-async function readRuntimeState<Key extends keyof RuntimeState>(fields : Key[]) : Promise<undefined | Pick<RuntimeState, Key>> {
-  // console.log("fields to read: ", fields)
-  let isInited = (await browser.storage.session.get<{runtimeStateInited : true | undefined}>('runtimeStateInited')).runtimeStateInited
-  if (isInited === true) {
-    return await browser.storage.session.get<Pick<RuntimeState, Key>>(fields)
-  }
-  else return undefined
-}
-
-async function writeRuntimeState(changes : Partial<RuntimeState>) {
-  // console.log("writes changes: ", changes)
-  await browser.storage.session.set(changes)
-  // console.log("storage state: ", await browser.storage.session.get(null))
-}
 
 async function clearPatternTreeAndAutomations() {
   let toRemove : (keyof RuntimeState)[] = []
@@ -87,10 +72,11 @@ async function automationToActionList(automation : {baseNode : PatternTreeNodeID
 }
 
 async function sendAutomations() {
+  let autoCount = (await readRuntimeState(['automationsCount'])) !!.automationsCount
   let automations : ContextualTraitSet[][] = []
   let automationsSet = new Map<string, true>()
   for (const auto of (await getSortedAutomations()).toReversed()) {
-    if (automationsSet.size >= AUTOMATIONS_COUNT) break;
+    if (automationsSet.size >= autoCount) break;
     let actions = await automationToActionList(auto)
     let key = stringify(actions)
     if ((!automationsSet.has(key)) && (actions.every(isCorrectTraitSet))) {
@@ -200,33 +186,21 @@ async function runAutomation(actions : StandaloneTraitSet[]) : Promise<boolean> 
   return true
 }
 
+async function getAuthToken() : Promise<string | undefined> {
+    console.log('try getAuth')
+    try {
+      const tokenRes = await browser.identity.getAuthToken({interactive : true})
+      return tokenRes.token
+    }
+    catch (e) {
+      console.error('error on getting token: ', e)
+      return undefined
+    }
+}
+
 export default defineBackground(() => {
   console.log('Hello background!', { id: browser.runtime.id });
   
-  console.log('getAuth')
-  browser.identity.getAuthToken(
-    {interactive : true},
-    (result) => {
-      console.log('token got!!!!')
-      if (result !== undefined) {
-        console.log('auth result: ', JSON.stringify(result))
-        fetch('http://localhost:3006/test_token', {
-          method : 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({token : result})
-        }).then(
-          () => console.log('test_token answered')
-        )
-      }
-      else {
-        console.error('wrong auth answer');
-        console.log(browser.runtime.lastError)
-        console.log(result)
-      }
-    }
-  )
 
   browser.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
@@ -243,14 +217,15 @@ export default defineBackground(() => {
           }
         )
         let automations = {}
-        collectBestAutomations(tree, automations, undefined, AUTOMATIONS_COUNT)
-        let settings : Partial<RuntimeState> = {
+        collectBestAutomations(tree, automations, undefined, 30)
+        let settings : RuntimeSettings & RuntimePatternsState = {
           runtimeStateInited : true,
+          automationsCount : 30,
           maxPatternLenght : 12,
-          username : "test_user_14",
           cursors : new Array(12).fill(null),
           localActionsList : [],
-          sendedActionsPrefixLenght : 0
+          sendedActionsPrefixLenght : 0,
+          settingsLocallyChanged : false
         }
         settings.cursors!![0] = tree.rootPatternTreeNode
         await writeRuntimeState(tree)
@@ -308,69 +283,90 @@ export default defineBackground(() => {
         )
         return true
       }
+      else if (message.type === 'write_state') {
+        console.log('writing state from another script, changes: ', message)
+        stateInteractQueue = stateInteractQueue.then(
+          async () => {
+            await writeRuntimeState(message.changes)
+            sendResponse('background writen')
+          }
+        )
+        return true
+      }
     }
   )
 
   browser.runtime.onInstalled.addListener(() => {
-    browser.alarms.create("push_alarm", { periodInMinutes : 1 });
-    browser.alarms.create("pull_alarm", { periodInMinutes: 1 });
+    browser.alarms.create("push_alarm", { periodInMinutes : 0.1 });
+    browser.alarms.create("pull_alarm", { periodInMinutes: 0.1 });
   })
   browser.alarms.onAlarm.addListener(
     (alarm) => {
       if (alarm.name === "push_alarm") {
         stateInteractQueue = stateInteractQueue.then(
           async () => {
-            let state = await readRuntimeState(['username', 'maxPatternLenght', 'localActionsList', 'sendedActionsPrefixLenght'])
+            let state = await readRuntimeState(['maxPatternLenght', 'automationsCount', 'localActionsList', 'sendedActionsPrefixLenght', 'settingsLocallyChanged'])
             if (state !== undefined) {
-              const respData : PushDataReq = {
-                auth : {
-                  username : state.username
-                },
-                settings : {
-                  maxPatternLenght : state.maxPatternLenght
-                },
-                actions : 
-                  state.localActionsList.slice(
-                    state.sendedActionsPrefixLenght
-                  ),
-                actionsPrefix : state.localActionsList.slice(
-                  Math.max(
-                    0, 
-                    state.sendedActionsPrefixLenght - state.maxPatternLenght
-                  ),
-                  state.sendedActionsPrefixLenght
-                )
-              }
-              try{
-                let fetchRes = await fetch('http://localhost:3006/push_data', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json'
+              const authToken = await getAuthToken()
+              if (authToken !== undefined) {
+                const respData : PushDataReq = {
+                  auth : {
+                    googleOauthToken : authToken
                   },
-                  body: JSON.stringify(respData)
-                })
-                if (fetchRes.ok) {
-                  const ans : PushDataAns = await fetchRes.json()
-                  console.log("push answer: ", ans)
-                  if (ans === "succes") {
-                    console.log("sucessful push")
-                    await writeRuntimeState(
-                      {
-                        sendedActionsPrefixLenght : state.localActionsList.length
-                      }
-                    )
+                  settings : state.settingsLocallyChanged ? {
+                    maxPatternLenght : state.maxPatternLenght,
+                    automationsCount : state.automationsCount
+                  } : undefined,
+                  actions : 
+                    state.localActionsList.slice(
+                      state.sendedActionsPrefixLenght
+                    ),
+                  actionsPrefix : state.localActionsList.slice(
+                    Math.max(
+                      0, 
+                      state.sendedActionsPrefixLenght - state.maxPatternLenght
+                    ),
+                    state.sendedActionsPrefixLenght
+                  )
+                }
+                try{
+                  let fetchRes = await fetch('http://localhost:3006/push_data', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(respData)
+                  })
+                  if (fetchRes.ok) {
+                    const ans : PushDataAns = await fetchRes.json()
+                    console.log("push answer: ", ans)
+                    if (ans === "succes") {
+                      console.log("sucessful push")
+                      await writeRuntimeState(
+                        {
+                          sendedActionsPrefixLenght : state.localActionsList.length,
+                          settingsLocallyChanged : false
+                        }
+                      )
+                    }
+                    else if (ans === 'authFailed') {
+                      console.error('autn failed on server side')
+                      await browser.identity.removeCachedAuthToken({token : authToken})
+                    }
+                    else {
+                      console.log("server push logic went wrong, answer: ", ans)
+                    }
                   }
                   else {
-                    console.log("server push logic went wrong, answer: ", ans)
+                    console.error("Bed answer code on push")
                   }
                 }
-                else {
-                  console.error("Bed answer code on push")
+                catch(err){
+                  console.error("error on push: ", err)
                 }
               }
-              catch(err){
-                console.error("error on push: ", err)
-              }
+              else
+                console.error('failed to get token from user')
             }
             else{
               console.error("runtime state not inited")
@@ -382,55 +378,65 @@ export default defineBackground(() => {
       else if (alarm.name === "pull_alarm") {
         stateInteractQueue = stateInteractQueue.then(
           async () => {
-            let state = await readRuntimeState(['username', 'localActionsList'])
+            let state = await readRuntimeState(['localActionsList', 'settingsLocallyChanged'])
             if (state !== undefined) {
-              try{
-                const req : PullDataReq = {
-                  auth : {
-                    username : state.username
+              const authToken = await getAuthToken()
+              if (authToken !== undefined) {
+                try{
+                  const req : PullDataReq = {
+                    auth : {
+                      googleOauthToken : authToken
+                    }
                   }
-                }
-                let fetchAns = await fetch('http://localhost:3006/pull_data', 
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body : JSON.stringify(req)
-                  }
-                )
-                if (fetchAns.ok) {
-                  const ans : PullDataAns = await fetchAns.json()
-                  console.log("pull answer: ", ans)
-                  if (ans === "fail") {
-                    console.error("some error on server side (pull data)")
+                  let fetchAns = await fetch('http://localhost:3006/pull_data', 
+                    {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body : JSON.stringify(req)
+                    }
+                  )
+                  if (fetchAns.ok) {
+                    const ans : PullDataAns = await fetchAns.json()
+                    console.log("pull answer: ", ans)
+                    if (ans === "fail") {
+                      console.error("some error on server side (pull data)")
+                    }
+                    else if (ans === 'authFailed') {
+                      console.error('autn failed on server side')
+                      await browser.identity.removeCachedAuthToken({token : authToken})
+                    }
+                    else {
+                      let tree = createPatternTreeFromData(ans.tree)
+                      let automations = {}
+                      collectBestAutomations(tree, automations, undefined, ans.settings.automationsCount)
+                      let settings : Partial<RuntimeSettings> = {
+                        maxPatternLenght : ans.settings.maxPatternLenght,
+                        automationsCount : ans.settings.automationsCount,
+                      }
+                      let cursors = new Array<PatternTreeNodeID|null>(ans.settings.maxPatternLenght).fill(null)
+                      cursors[0] = tree.rootPatternTreeNode
+                      await clearPatternTreeAndAutomations()
+                      await writeRuntimeState(tree)
+                      await writeRuntimeState(automations)
+                      await writeRuntimeState({cursors : cursors})
+                      if (!state.settingsLocallyChanged)
+                        await writeRuntimeState(settings)
+                      for (let i = Math.max(0, state.localActionsList.length - settings.maxPatternLenght!!); i < state.localActionsList.length; i++) {
+                        await shiftCursors(state.localActionsList[i])
+                      }
+                      await sendAutomations()
+                      console.log("succesful pull")
+                    }
                   }
                   else {
-                    let tree = createPatternTreeFromData(ans.tree)
-                    let automations = {}
-                    collectBestAutomations(tree, automations, undefined, AUTOMATIONS_COUNT)
-                    let settings : Partial<RuntimeState> = {
-                      maxPatternLenght : ans.settings.maxPatternLenght,
-                      cursors : new Array<PatternTreeNodeID|null>(ans.settings.maxPatternLenght).fill(null)
-                    }
-                    settings.cursors!![0] = tree.rootPatternTreeNode
-                    await clearPatternTreeAndAutomations()
-                    await writeRuntimeState(tree)
-                    await writeRuntimeState(automations)
-                    await writeRuntimeState(settings)
-                    for (let i = Math.max(0, state.localActionsList.length - settings.maxPatternLenght!!); i < state.localActionsList.length; i++) {
-                      await shiftCursors(state.localActionsList[i])
-                    }
-                    await sendAutomations()
-                    console.log("succesful pull")
+                    console.error("beg response status code on pull")
                   }
                 }
-                else {
-                  console.error("beg response status code on pull")
+                catch(e){
+                  console.error("some error on pull: ", e)
                 }
-              }
-              catch(e){
-                console.error("some error on pull: ", e)
               }
             }
             else{

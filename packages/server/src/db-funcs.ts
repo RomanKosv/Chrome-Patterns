@@ -83,29 +83,29 @@ export async function insertAction(userID : number, action: ActionInfo, pool : D
     ).rows[0] !!
 }
 
-export async function getUserByUsername(username : string, pool : DBPool) : Promise<User | undefined> {
+export async function getUserByGoogleID(googleID : string, pool : DBPool) : Promise<User | undefined> {
     return (
         await pool.query<User>(
             `
             select * from users
-                where username = $1
+                where google_id = $1
             `,
-            [username]
+            [googleID]
         )
     ).rows[0]
 }
 
-export async function tryCreateUser(username: string, pool : DBPool) : Promise<User | undefined> {
+export async function tryCreateUserWithGoogleID(googleID: string, pool : DBPool) : Promise<User | undefined> {
     return (
         await pool.query<User>(
             `
             insert into users
-                (username, max_pattern_lenght)
-                values ($1, $2)
-                on conflict (username) do nothing
+                (google_id, max_pattern_lenght, automations_count)
+                values ($1, $2, $3)
+                on conflict (google_id) do nothing
                 returning *
             `,
-            [username, defaultSettings.maxPatternLenght]
+            [googleID, defaultSettings.maxPatternLenght, defaultSettings.automationsCount]
         )
     ).rows[0]
 }
@@ -150,15 +150,17 @@ export async function changeUserSettings(userID : number, settings : UserSetting
     await pool.query(
         `
         update users
-            set max_pattern_lenght = $2
+            set max_pattern_lenght = $2,
+                automations_count = $3
             where id = $1
         `,
-        [userID, settings.maxPatternLenght]
+        [userID, settings.maxPatternLenght, settings.automationsCount]
     )
 }
 
 export function getUserSettings(user : User) : UserSettings {
     return {
-        maxPatternLenght : user.max_pattern_lenght
+        maxPatternLenght : user.max_pattern_lenght,
+        automationsCount : user.automations_count
     }
 }

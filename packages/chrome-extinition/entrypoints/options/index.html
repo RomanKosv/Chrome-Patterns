@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Настройки</title>
+  <style>
+    body { padding: 20px; font-family: sans-serif; width: 250px; }
+  </style>
+</head>
+<body>
+  <h2>Настройки (TS)</h2>
+  <label>
+    Max pattern lenght: 
+    <input type="number" min="1" max="30" value="10" id = "max_pattern_lenght">
+  </label>
+  <label>
+    Automations count to take: 
+    <input type="number" min="1" max="100" value="30" id = "automations_count">
+  </label>
+  <button id = "save">
+    Save changes
+  </button>
+  <script type="module" src="./options.ts"></script>
+</body>
+</html>

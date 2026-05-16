@@ -3,7 +3,8 @@ import type {StrictTraitsSet} from "@chrome-patterns/shared/actions";
 export interface User {
   id: number,
   max_pattern_lenght : number,
-  username : string
+  google_id : string,
+  automations_count : number
 }
 
 export interface Action {

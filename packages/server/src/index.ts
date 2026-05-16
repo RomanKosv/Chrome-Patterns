@@ -29,11 +29,19 @@ app.post('/pull_data', async (req: Request, res: Response) => {
     try{
         let reqest : PullDataReq = req.body
         let user = await getOrCreateUser(reqest.auth, pool);
-        let tree = await getPatternTree(user.id, pool)
-        const ans : PullDataAns = {
-            tree : tree,
-            settings : getUserSettings(user)
+        let ans : PullDataAns
+        if (user === undefined) {
+            console.error('cannot get google if from token', reqest.auth)
+            ans = 'authFailed'
         }
+        else {
+            let tree = await getPatternTree(user.id, pool)
+            ans = {
+                tree : tree,
+                settings : getUserSettings(user)
+            }
+        }
+        
         res.json(ans)
     }
     catch (e){
@@ -48,9 +56,17 @@ app.post('/push_data', async (req: Request, res: Response) => {
     try {
         let reqest : PushDataReq = req.body
         let user = await getOrCreateUser(reqest.auth, pool);
-        await changeUserSettings(user.id, reqest.settings, pool)
-        readActionStream(reqest.actions, reqest.actionsPrefix, user.id, reqest.settings, pool)
-        let ans : PushDataAns = "succes"
+        let ans : PushDataAns
+        if (user !== undefined) {
+            if (reqest.settings)
+                await changeUserSettings(user.id, reqest.settings, pool)
+            readActionStream(reqest.actions, reqest.actionsPrefix, user.id, reqest.settings ?? getUserSettings(user), pool)
+            ans = "succes"
+        }
+        else {
+            console.log('cannot get google id from token: ', reqest.auth)
+            ans = 'authFailed'
+        }
         res.json(ans)
     }
     catch (e) {

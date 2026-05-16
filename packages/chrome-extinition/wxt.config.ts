@@ -24,6 +24,9 @@ export default defineConfig(
                     'openid'
                 ]
             }
+        },
+        webExt : {
+            disabled : true
         }
     }
 );
