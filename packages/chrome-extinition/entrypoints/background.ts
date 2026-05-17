@@ -77,7 +77,7 @@ async function sendAutomations() {
   let automationsSet = new Map<string, true>()
   for (const auto of (await getSortedAutomations()).toReversed()) {
     if (automationsSet.size >= autoCount) break;
-    let actions = await automationToActionList(auto)
+    let actions = (await automationToActionList(auto))
     let key = stringify(actions)
     if ((!automationsSet.has(key)) && (actions.every(isCorrectTraitSet))) {
       automations.push(actions.map(asContextualTraitSet))
@@ -116,7 +116,7 @@ async function shiftCursors(action_ : ContextualActionInfo) {
 }
 
 async function tryRunAction(action : StandaloneTraitSet) : Promise<boolean> {
-  if (action.actionType === 'click') {
+  if ((action.actionType === 'click') || (action.actionType === 'edit_text')) {
     let tabs = (await browser.tabs.query({})).filter(
       tab => {
         if (tab.url !== undefined){
@@ -160,7 +160,7 @@ async function tryRunAction(action : StandaloneTraitSet) : Promise<boolean> {
     }
     return false
   }
-  const no : never = action.actionType
+  const no : never = action
   return no;
 }
 
@@ -170,6 +170,7 @@ async function runAutomation(actions : StandaloneTraitSet[]) : Promise<boolean> 
       (a, i) => [a, i]
     )
   ) {
+    console.log('try run action: ', action)
     let inProcessMessage : Message = {
       type : 'automation_preforming_status_message',
       status : 'doing_action',
@@ -242,7 +243,7 @@ export default defineBackground(() => {
         let action = message.action
         stateInteractQueue = stateInteractQueue.then(
           async () => {
-            let state = await readRuntimeState(['localActionsList'])
+            let state = await readRuntimeState(['localActionsList', 'sendedActionsPrefixLenght'])
             if (state !== undefined) {
               let minPageCreationN = 0;
               let maxPageCreationN = state.localActionsList.length
@@ -258,6 +259,17 @@ export default defineBackground(() => {
                 strictTraits : {
                   ...action.strictTraits,
                   relativePageOpenTime : minPageCreationN > 0 ? state.localActionsList.length - minPageCreationN : null
+                }
+              }
+              if (state.sendedActionsPrefixLenght <= state.localActionsList.length) {
+                const traits = state.localActionsList.at(-1)?.strictTraits
+                if (
+                  (traits?.actionType === 'edit_text')
+                  && (contextualAction.strictTraits.actionType === 'edit_text')
+                  && (contextualAction.strictTraits.pageLocation === traits.pageLocation)
+                  && (stringify(contextualAction.strictTraits.controlElement) === stringify(traits.controlElement))
+                ) {
+                  state.localActionsList.pop()
                 }
               }
               state.localActionsList.push(contextualAction)

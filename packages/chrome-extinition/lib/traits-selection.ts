@@ -27,21 +27,41 @@ input[type="image"],
 `
 
 export function getStrictTraitsFrom(action : RealtimeAction) : StandaloneTraitSet | undefined {
-    let control
-    if (action.event.target instanceof Element) {
-        let button = action.event.target.closest(clickacle_CSS_Selector)
-        if (button !== null) {
-            control = {
-                tagName : button.tagName,
-                text : button.textContent
+    if (action.actionType === 'click') {
+        let control
+        if (action.event.target instanceof Element) {
+            let button = action.event.target.closest(clickacle_CSS_Selector)
+            if (button !== null) {
+                control = {
+                    tagName : button.tagName,
+                    text : button.textContent
+                }
             }
         }
+        return control ? {
+            actionType : action.actionType,
+            pageLocation : action.window.location.hostname + action.window.location.pathname,
+            controlElement : control
+        } : undefined
     }
-    return control ? {
-        actionType : action.actionType,
-        pageLocation : action.window.location.hostname + action.window.location.pathname,
-        controlElement : control
-    } : undefined
+    else if (action.actionType === 'input_text') {
+        const target = action.event.target
+        if ((target instanceof HTMLInputElement) || (target instanceof HTMLTextAreaElement)) {
+            return {
+                actionType : 'edit_text',
+                pageLocation : action.window.location.hostname + action.window.location.pathname,
+                newText : target.value,
+                controlElement : {
+                    tagName : target.tagName,
+                    placeholder : target.placeholder
+                }
+            }
+        }
+        else return undefined
+    }
+    else {
+        const no : never = action
+    }
 }
 
 export function toActionInfo(action : RealtimeAction, timeOrigin : number) : StandaloneActionInfo | undefined {

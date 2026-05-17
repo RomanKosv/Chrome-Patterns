@@ -145,7 +145,7 @@ export function collectBestAutomations(tree : PatternTreeStorage, storage : Auto
         automations.sort(
             (a, b) => automationCost(a) - automationCost(b)
         )
-        console.log("automations: ", automations)
+        // console.log("automations: ", automations)
         storage[getAutomationSetID(nodeID)] = automations.slice(-storagedAutomationsCount)
         return [getAutomationSetID(nodeID), automations]
     }

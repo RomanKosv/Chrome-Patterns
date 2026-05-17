@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict qsEhohbl5iNlGAGUSfqsJ1l2ROTHzyPtXy2MeVrfWmhB9optsXHIfskdSJAZB1s
+\restrict owMbTMTYk0tLgvgWG57AaW8YKctdJOnxBuI35v2pDhDyFqCjcjGpKfADdhd5p95
 
 -- Dumped from database version 18.3
 -- Dumped by pg_dump version 18.3
 
--- Started on 2026-05-06 11:18:06
+-- Started on 2026-05-17 19:45:29
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -22,7 +22,7 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- TOC entry 6 (class 2615 OID 24760)
+-- TOC entry 6 (class 2615 OID 24581)
 -- Name: cache; Type: SCHEMA; Schema: -; Owner: postgres
 --
 
@@ -36,7 +36,7 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- TOC entry 223 (class 1259 OID 24702)
+-- TOC entry 220 (class 1259 OID 24582)
 -- Name: actions; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -51,7 +51,7 @@ CREATE TABLE public.actions (
 ALTER TABLE public.actions OWNER TO postgres;
 
 --
--- TOC entry 222 (class 1259 OID 24701)
+-- TOC entry 221 (class 1259 OID 24589)
 -- Name: actions_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -67,8 +67,8 @@ CREATE SEQUENCE public.actions_id_seq
 ALTER SEQUENCE public.actions_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4942 (class 0 OID 0)
--- Dependencies: 222
+-- TOC entry 4945 (class 0 OID 0)
+-- Dependencies: 221
 -- Name: actions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -76,7 +76,7 @@ ALTER SEQUENCE public.actions_id_seq OWNED BY public.actions.id;
 
 
 --
--- TOC entry 225 (class 1259 OID 24718)
+-- TOC entry 222 (class 1259 OID 24590)
 -- Name: pattern_tree_nodes; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -94,7 +94,7 @@ CREATE TABLE public.pattern_tree_nodes (
 ALTER TABLE public.pattern_tree_nodes OWNER TO postgres;
 
 --
--- TOC entry 226 (class 1259 OID 24738)
+-- TOC entry 223 (class 1259 OID 24598)
 -- Name: pattern_tree_nodes_actions; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -108,7 +108,7 @@ CREATE TABLE public.pattern_tree_nodes_actions (
 ALTER TABLE public.pattern_tree_nodes_actions OWNER TO postgres;
 
 --
--- TOC entry 224 (class 1259 OID 24717)
+-- TOC entry 224 (class 1259 OID 24604)
 -- Name: pattern_tree_nodes_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -124,7 +124,7 @@ CREATE SEQUENCE public.pattern_tree_nodes_id_seq
 ALTER SEQUENCE public.pattern_tree_nodes_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4943 (class 0 OID 0)
+-- TOC entry 4946 (class 0 OID 0)
 -- Dependencies: 224
 -- Name: pattern_tree_nodes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -133,13 +133,16 @@ ALTER SEQUENCE public.pattern_tree_nodes_id_seq OWNED BY public.pattern_tree_nod
 
 
 --
--- TOC entry 221 (class 1259 OID 24694)
+-- TOC entry 225 (class 1259 OID 24605)
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.users (
     id integer NOT NULL,
     max_pattern_lenght integer,
+    google_id text CONSTRAINT users_username_not_null NOT NULL,
+    automations_count integer,
+    CONSTRAINT users_automations_count_check CHECK ((automations_count >= 1)),
     CONSTRAINT users_max_pattern_lenght_check CHECK ((max_pattern_lenght > 0))
 );
 
@@ -147,7 +150,7 @@ CREATE TABLE public.users (
 ALTER TABLE public.users OWNER TO postgres;
 
 --
--- TOC entry 220 (class 1259 OID 24693)
+-- TOC entry 226 (class 1259 OID 24610)
 -- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -163,8 +166,8 @@ CREATE SEQUENCE public.users_id_seq
 ALTER SEQUENCE public.users_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4944 (class 0 OID 0)
--- Dependencies: 220
+-- TOC entry 4947 (class 0 OID 0)
+-- Dependencies: 226
 -- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -172,7 +175,7 @@ ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- TOC entry 4771 (class 2604 OID 24705)
+-- TOC entry 4770 (class 2604 OID 24611)
 -- Name: actions id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -180,7 +183,7 @@ ALTER TABLE ONLY public.actions ALTER COLUMN id SET DEFAULT nextval('public.acti
 
 
 --
--- TOC entry 4772 (class 2604 OID 24721)
+-- TOC entry 4771 (class 2604 OID 24612)
 -- Name: pattern_tree_nodes id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -188,7 +191,7 @@ ALTER TABLE ONLY public.pattern_tree_nodes ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- TOC entry 4770 (class 2604 OID 24697)
+-- TOC entry 4772 (class 2604 OID 24613)
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -196,7 +199,7 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
--- TOC entry 4778 (class 2606 OID 24711)
+-- TOC entry 4777 (class 2606 OID 24615)
 -- Name: actions actions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -205,7 +208,7 @@ ALTER TABLE ONLY public.actions
 
 
 --
--- TOC entry 4784 (class 2606 OID 24745)
+-- TOC entry 4783 (class 2606 OID 24617)
 -- Name: pattern_tree_nodes_actions pattern_tree_nodes_actions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -214,7 +217,7 @@ ALTER TABLE ONLY public.pattern_tree_nodes_actions
 
 
 --
--- TOC entry 4780 (class 2606 OID 24727)
+-- TOC entry 4779 (class 2606 OID 24619)
 -- Name: pattern_tree_nodes pattern_tree_nodes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -223,7 +226,7 @@ ALTER TABLE ONLY public.pattern_tree_nodes
 
 
 --
--- TOC entry 4782 (class 2606 OID 24759)
+-- TOC entry 4781 (class 2606 OID 24621)
 -- Name: pattern_tree_nodes pattern_tree_nodes_user_id_parent_id_strict_traits_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -232,7 +235,7 @@ ALTER TABLE ONLY public.pattern_tree_nodes
 
 
 --
--- TOC entry 4776 (class 2606 OID 24700)
+-- TOC entry 4785 (class 2606 OID 24623)
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -241,7 +244,16 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 4785 (class 2606 OID 24712)
+-- TOC entry 4787 (class 2606 OID 24651)
+-- Name: users users_username_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_username_key UNIQUE (google_id);
+
+
+--
+-- TOC entry 4788 (class 2606 OID 24624)
 -- Name: actions actions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -250,7 +262,7 @@ ALTER TABLE ONLY public.actions
 
 
 --
--- TOC entry 4788 (class 2606 OID 24751)
+-- TOC entry 4791 (class 2606 OID 24629)
 -- Name: pattern_tree_nodes_actions pattern_tree_nodes_actions_user_id_action_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -259,7 +271,7 @@ ALTER TABLE ONLY public.pattern_tree_nodes_actions
 
 
 --
--- TOC entry 4789 (class 2606 OID 24746)
+-- TOC entry 4792 (class 2606 OID 24634)
 -- Name: pattern_tree_nodes_actions pattern_tree_nodes_actions_user_id_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -268,7 +280,7 @@ ALTER TABLE ONLY public.pattern_tree_nodes_actions
 
 
 --
--- TOC entry 4786 (class 2606 OID 24733)
+-- TOC entry 4789 (class 2606 OID 24639)
 -- Name: pattern_tree_nodes pattern_tree_nodes_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -277,7 +289,7 @@ ALTER TABLE ONLY public.pattern_tree_nodes
 
 
 --
--- TOC entry 4787 (class 2606 OID 24728)
+-- TOC entry 4790 (class 2606 OID 24644)
 -- Name: pattern_tree_nodes pattern_tree_nodes_user_id_parent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -285,11 +297,11 @@ ALTER TABLE ONLY public.pattern_tree_nodes
     ADD CONSTRAINT pattern_tree_nodes_user_id_parent_id_fkey FOREIGN KEY (user_id, parent_id) REFERENCES public.pattern_tree_nodes(user_id, id) ON DELETE CASCADE;
 
 
--- Completed on 2026-05-06 11:18:07
+-- Completed on 2026-05-17 19:45:29
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict qsEhohbl5iNlGAGUSfqsJ1l2ROTHzyPtXy2MeVrfWmhB9optsXHIfskdSJAZB1s
+\unrestrict owMbTMTYk0tLgvgWG57AaW8YKctdJOnxBuI35v2pDhDyFqCjcjGpKfADdhd5p95
 
