@@ -164,3 +164,28 @@ export function getUserSettings(user : User) : UserSettings {
         automationsCount : user.automations_count
     }
 }
+
+export async function deleteActions(userID : number, toDelete : {pages : string, startTime : Date, endTime : Date}, pool : DBPool) {
+    const regexp = '^' + toDelete.pages + '$'
+    pool.query(
+        `
+        delete from actions
+            where user_id = $1 and page ~* $2 and ($3 <= time) and (time <= $4)
+        `,
+        [userID, regexp, toDelete.startTime, toDelete.endTime]
+    )
+}
+
+export async function cleanupPatternTree(userID : number, pool : DBPool) {
+    pool.query(
+        `
+        delete from pattern_tree_nodes
+            where user_id = $1 
+            and (
+                select count(action_id) from pattern_tree_nodes_actions
+                    where user_id = $1 and node_id = id
+            ) = 0
+        `,
+        [userID]
+    )
+}

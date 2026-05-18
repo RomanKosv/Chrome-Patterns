@@ -5,7 +5,7 @@ import type  { Request, Response } from 'express';
 import { getOrCreateUser } from './auth.js';
 import {Pool as DBPool} from 'pg';
 import type { PatternTreeNode } from '@chrome-patterns/shared/pattern-tree';
-import { changeUserSettings, getPatternTree, getUserSettings } from './db-funcs.js';
+import { changeUserSettings, cleanupPatternTree, deleteActions, getPatternTree, getUserSettings } from './db-funcs.js';
 import { readActionStream as readActionStream } from './client-server-data-stream-read.js';
 import { getGoogleID } from './google-auth.js';
 
@@ -60,7 +60,10 @@ app.post('/push_data', async (req: Request, res: Response) => {
         if (user !== undefined) {
             if (reqest.settings)
                 await changeUserSettings(user.id, reqest.settings, pool)
-            readActionStream(reqest.actions, reqest.actionsPrefix, user.id, reqest.settings ?? getUserSettings(user), pool)
+            await readActionStream(reqest.actions, reqest.actionsPrefix, user.id, reqest.settings ?? getUserSettings(user), pool)
+            for(const del of reqest.toDelete)
+                await deleteActions(user.id, del, pool)
+            await cleanupPatternTree(user.id, pool)
             ans = "succes"
         }
         else {

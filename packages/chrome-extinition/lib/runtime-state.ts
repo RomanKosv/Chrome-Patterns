@@ -11,7 +11,8 @@ export type RuntimePatternsState = {
     runtimeStateInited : true
     cursors : (PatternTreeNodeID | null)[],
     localActionsList : ContextualActionInfo[],
-    sendedActionsPrefixLenght : number
+    sendedActionsPrefixLenght : number,
+    toDelete : {pages : string, startTime : Date, endTime : Date}[]
 } 
 
 export type RuntimeState = RuntimeSettings & RuntimePatternsState & PatternTreeStorage & AutomationsStorage

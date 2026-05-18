@@ -23,4 +23,9 @@ export type Message = {
 } | {
     type : 'write_state',
     changes : Partial<RuntimeState>
+} | {
+    type : 'delete_data',
+    pages : string,
+    startTime : Date,
+    endTime : Date
 }

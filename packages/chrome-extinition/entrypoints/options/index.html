@@ -2,13 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Настройки</title>
+  <title>Settings</title>
   <style>
     body { padding: 20px; font-family: sans-serif; width: 250px; }
   </style>
 </head>
 <body>
-  <h2>Настройки (TS)</h2>
+  <h2>Settings </h2>
   <label>
     Max pattern lenght: 
     <input type="number" min="1" max="30" value="10" id = "max_pattern_lenght">
@@ -18,6 +18,34 @@
     Automations count to take: 
     <input type="number" min="1" max="100" value="30" id = "automations_count">
   </label>
+  <button id="open-delete">
+    Delete data
+  </button>
+  <dialog id="remove-dialog">
+    <div>
+      <h2>Delete data</h2>
+      <label>
+        Со страниц
+        <input type="text" id="pageRegexp" placeholder="metanit.com/*">
+      </label>
+      <p></p>
+      <label>
+        За время
+        <label>
+          С
+          <input type="datetime-local" id="startTime">
+        </label>
+        <label>
+          До
+          <input type="datetime-local" id="endTime">
+        </label>
+      </label>
+      <form method="dialog">
+        <button value="cancel">Cancel</button>
+        <button value="confirm">Delete</button>
+      </form>
+    </div>
+  </dialog>
   <button id = "save">
     Save changes
   </button>

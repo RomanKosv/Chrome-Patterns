@@ -226,7 +226,8 @@ export default defineBackground(() => {
           cursors : new Array(12).fill(null),
           localActionsList : [],
           sendedActionsPrefixLenght : 0,
-          settingsLocallyChanged : false
+          settingsLocallyChanged : false,
+          toDelete : []
         }
         settings.cursors!![0] = tree.rootPatternTreeNode
         await writeRuntimeState(tree)
@@ -305,6 +306,27 @@ export default defineBackground(() => {
         )
         return true
       }
+      else if (message.type === 'delete_data') {
+        console.error('delete data request: ', message)
+        stateInteractQueue = stateInteractQueue.then(
+          async () => {
+            const state = await readRuntimeState(['toDelete'])
+            if (state !== undefined) {
+              state.toDelete.push({
+                pages : message.pages,
+                startTime : message.startTime,
+                endTime : message.endTime
+              })
+              await writeRuntimeState({
+                toDelete : state.toDelete
+              })
+              console.error('deleted data, request: ', message)
+              sendResponse(true)
+            }
+          }
+        )
+        return true
+      }
     }
   )
 
@@ -317,7 +339,7 @@ export default defineBackground(() => {
       if (alarm.name === "push_alarm") {
         stateInteractQueue = stateInteractQueue.then(
           async () => {
-            let state = await readRuntimeState(['maxPatternLenght', 'automationsCount', 'localActionsList', 'sendedActionsPrefixLenght', 'settingsLocallyChanged'])
+            let state = await readRuntimeState(['toDelete', 'maxPatternLenght', 'automationsCount', 'localActionsList', 'sendedActionsPrefixLenght', 'settingsLocallyChanged'])
             if (state !== undefined) {
               const authToken = await getAuthToken()
               if (authToken !== undefined) {
@@ -339,7 +361,8 @@ export default defineBackground(() => {
                       state.sendedActionsPrefixLenght - state.maxPatternLenght
                     ),
                     state.sendedActionsPrefixLenght
-                  )
+                  ),
+                  toDelete : state.toDelete
                 }
                 try{
                   let fetchRes = await fetch('http://localhost:3006/push_data', {
@@ -357,7 +380,8 @@ export default defineBackground(() => {
                       await writeRuntimeState(
                         {
                           sendedActionsPrefixLenght : state.localActionsList.length,
-                          settingsLocallyChanged : false
+                          settingsLocallyChanged : false,
+                          toDelete : []
                         }
                       )
                     }

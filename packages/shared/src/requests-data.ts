@@ -19,6 +19,7 @@ export type PushDataReq = {
     settings? : UserSettings,
     actions : ActionInfo[],
     actionsPrefix : ActionInfo[]
+    toDelete : {pages : string, startTime : Date, endTime : Date}[]
 } & ReqestWithAuth
 
 export type PushDataAns = "succes" | "fail" | AuthFailAns

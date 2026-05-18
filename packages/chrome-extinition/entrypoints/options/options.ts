@@ -35,3 +35,51 @@ saveButton.addEventListener(
         await browser.runtime.sendMessage(message)
     }
 )
+
+const openDeleteButton = document.getElementById("open-delete") !!
+const pagesTODelete = document.getElementById("pageRegexp") !! as HTMLInputElement
+const startTime = document.getElementById("startTime") !! as HTMLInputElement
+const endTime = document.getElementById("endTime") !! as HTMLInputElement
+const deleteDialog = document.getElementById("remove-dialog") !! as HTMLDialogElement
+
+openDeleteButton.addEventListener(
+    'click',
+    (ev) => {
+        deleteDialog.showModal()
+    }
+)
+
+startTime.addEventListener(
+    'change',
+    (ev) => {
+        endTime.min = startTime.value
+    }
+)
+
+endTime.addEventListener(
+    'change',
+    (ev) => {
+        startTime.max = endTime.value
+    }
+)
+
+deleteDialog.addEventListener(
+    'close',
+    async (ev) => {
+        if (deleteDialog.returnValue === 'confirm') {
+            try {
+                const message : Message = {
+                    type : 'delete_data',
+                    pages : pagesTODelete.value,
+                    startTime : new Date(startTime.value),
+                    endTime : new Date(endTime.value)
+                }
+                await browser.runtime.sendMessage(message)
+            }
+            catch (e) {
+                console.error(e)
+            }
+            
+        }
+    }
+)
