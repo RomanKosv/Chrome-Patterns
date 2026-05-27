@@ -102,7 +102,7 @@ export function getAutomationSetID(node : PatternTreeNodeID) : AutomationSetID {
 }
 
 export function automationCost(automation : Automation) : number {
-    return automation.lenght * automation.chanseMetric * (0.9 ** automation.lenght)
+    return automation.lenght * automation.chanseMetric * (0.8 ** automation.lenght)
 }
 
 export function collectBestAutomations(tree : PatternTreeStorage, storage : AutomationsStorage, nodeID : PatternTreeNodeID | undefined, storagedAutomationsCount : number) : [AutomationSetID, Automation[]] {
