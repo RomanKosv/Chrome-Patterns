@@ -28,4 +28,6 @@ export type Message = {
     pages : string,
     startTime : Date,
     endTime : Date
+} | {
+    type : 'sidepanel_opened'
 }

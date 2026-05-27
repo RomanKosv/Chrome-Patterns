@@ -119,7 +119,7 @@ export function getVisualisationElementOfAutomatisation(
         type : 'automation_preforming_request',
         automation : Array.from(actions)
     }
-    list.addEventListener('click', () => browser.runtime.sendMessage(automationMessage))
+    // list.addEventListener('click', () => browser.runtime.sendMessage(automationMessage))
     for(let action of actions) 
         list.append(getVisualisationElementOfAction(action, document, actionIconWidth, actionIconHeight))
     return list

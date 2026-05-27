@@ -66,19 +66,39 @@ class AutomationsVersion {
                 console.warn('visualisation interrupted')
                 throw new DOMException('The operation was aborted.', 'AbortError');
             }
-            elements.push(getVisualisationElementOfAutomatisation(actions, document, '80px', '40px'))
+            const el = getVisualisationElementOfAutomatisation(actions, document, '80px', '40px')
+            el.addEventListener('click', () => runAutomation(actions))
+            elements.push(el)
         }
         hintContainer.replaceChildren()
-        for(let el of elements)
+        for(let el of elements){
             hintContainer.append(el)
+        }
         await this.updateAutomationsVisibility(hintContainer)
     }
 }
 
+async function runAutomation(actions : ContextualTraitSet[]) {
+    let automationMessage : Message = {
+        type : 'automation_preforming_request',
+        automation : Array.from(actions)
+    }
+    const result : boolean = await browser.runtime.sendMessage(automationMessage)
+    automationStateSpan.textContent = result ? 'complete' : 'fail'
+    automationStateSpan.style.color = result ? 'green' : 'blue'
+}
+
 console.log('init sidepanel')
 
-let hintContainer = document.getElementById('automations-container') !!
+const openMessage : Message = {type : 'sidepanel_opened'}
+
+browser.runtime.sendMessage(
+    openMessage
+)
+
+const hintContainer = document.getElementById('automations-container') !!
 let currentState = new AutomationsVersion()
+const automationStateSpan = document.getElementById('automation_state') !!
 
 browser.runtime.onMessage.addListener(
     async (message_, sender, sendResponse) => {
@@ -93,6 +113,10 @@ browser.runtime.onMessage.addListener(
             finally{
                 sendResponse(true);
             }
+        }
+        else if (message.type === 'automation_preforming_status_message') {
+            automationStateSpan.textContent = `doing action ${message.actionIndex + 1}`
+            automationStateSpan.style.color = 'orange'
         }
     }
 )

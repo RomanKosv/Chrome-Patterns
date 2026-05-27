@@ -7,8 +7,10 @@ import { catPageOpenTime, StrictTraitsSet } from "@chrome-patterns/shared/action
 import stringify from "fast-json-stable-stringify";
 import { asContextualTraitSet, ContextualTraitSet, isCorrectTraitSet, StandaloneTraitSet } from "@/lib/traits";
 
-const RUN_ACTION_ATTEMPTS = 3
+const RUN_ACTION_ATTEMPTS = 6
 const SLEEP_AFTER_ACTION_MS = 200
+
+let automationsCollectingAbortController = new AbortController()
 
 let stateInteractQueue = Promise.resolve();
 
@@ -30,7 +32,7 @@ async function clearPatternTreeAndAutomations() {
   await browser.storage.session.remove<RuntimeState>(toRemove)
 }
 
-async function getSortedAutomations() : Promise<(Automation & {baseNode : PatternTreeNodeID})[]> {
+async function getSortedAutomations(signal : AbortSignal) : Promise<(Automation & {baseNode : PatternTreeNodeID})[]> {
   let {
     cursors, 
     probabilityMetricOfFullVariety
@@ -39,8 +41,11 @@ async function getSortedAutomations() : Promise<(Automation & {baseNode : Patter
   for(let curs of cursors) {
     if (curs !== null) {
       const autoID = getAutomationSetID(curs)
+      signal.throwIfAborted()
       let automationsSubset = (await readRuntimeState([autoID]))!![autoID]!!
+      signal.throwIfAborted()
       let node = (await readRuntimeState([curs]))!![curs] !!
+      signal.throwIfAborted()
       for (let auto of automationsSubset) {
         automations.push(
           {
@@ -71,13 +76,14 @@ async function automationToActionList(automation : {baseNode : PatternTreeNodeID
   }
 }
 
-async function sendAutomations() {
+async function sendAutomations(signal : AbortSignal) {
   let autoCount = (await readRuntimeState(['automationsCount'])) !!.automationsCount
   let automations : ContextualTraitSet[][] = []
   let automationsSet = new Map<string, true>()
-  for (const auto of (await getSortedAutomations()).toReversed()) {
+  for (const auto of (await getSortedAutomations(signal)).toReversed()) {
     if (automationsSet.size >= autoCount) break;
     let actions = (await automationToActionList(auto))
+    signal.throwIfAborted()
     let key = stringify(actions)
     if ((!automationsSet.has(key)) && (actions.every(isCorrectTraitSet))) {
       automations.push(actions.map(asContextualTraitSet))
@@ -233,6 +239,7 @@ export default defineBackground(() => {
         await writeRuntimeState(tree)
         await writeRuntimeState(automations)
         await writeRuntimeState(settings)
+        pullData()
       }
     }
   )
@@ -241,6 +248,8 @@ export default defineBackground(() => {
     (message_, sender, sendResponse) => {
       const message : Message = message_
       if (message.type === 'page_action') {
+        automationsCollectingAbortController.abort()
+        const currentAbortController = automationsCollectingAbortController = new AbortController()
         let action = message.action
         stateInteractQueue = stateInteractQueue.then(
           async () => {
@@ -281,7 +290,14 @@ export default defineBackground(() => {
                 }
               )
               console.log('sending automations')
-              await sendAutomations()
+              try {
+                console.log('start send auto in action')
+                await sendAutomations(currentAbortController.signal)
+                console.log('senden automations in action')
+              }
+              catch(e) {
+                console.warn('abort on sending automations in action ', e)
+              }
             }
             else console.log("state not inited yet")
             sendResponse('background got message');
@@ -327,162 +343,195 @@ export default defineBackground(() => {
         )
         return true
       }
+      else if (message.type === 'sidepanel_opened') {
+        automationsCollectingAbortController.abort()
+        const currentAbortController = automationsCollectingAbortController = new AbortController()
+        stateInteractQueue = stateInteractQueue.then(
+          async () => {
+            if ((await readRuntimeState([])) !== undefined) {
+              try{
+                await sendAutomations(currentAbortController.signal)
+              }
+              catch (e) {
+                console.warn('sending automations aborted in sidepanel opening')
+              }
+            }
+            sendResponse(true)
+          }
+        )
+        return true
+      }
     }
   )
 
   browser.runtime.onInstalled.addListener(() => {
-    browser.alarms.create("push_alarm", { periodInMinutes : 0.1 });
-    browser.alarms.create("pull_alarm", { periodInMinutes: 0.1 });
+    browser.alarms.create("push_alarm", { periodInMinutes : 0.5 });
+    browser.alarms.create("pull_alarm", { periodInMinutes: 0.5 });
   })
   browser.alarms.onAlarm.addListener(
     (alarm) => {
       if (alarm.name === "push_alarm") {
-        stateInteractQueue = stateInteractQueue.then(
-          async () => {
-            let state = await readRuntimeState(['toDelete', 'maxPatternLenght', 'automationsCount', 'localActionsList', 'sendedActionsPrefixLenght', 'settingsLocallyChanged'])
-            if (state !== undefined) {
-              const authToken = await getAuthToken()
-              if (authToken !== undefined) {
-                const respData : PushDataReq = {
-                  auth : {
-                    googleOauthToken : authToken
-                  },
-                  settings : state.settingsLocallyChanged ? {
-                    maxPatternLenght : state.maxPatternLenght,
-                    automationsCount : state.automationsCount
-                  } : undefined,
-                  actions : 
-                    state.localActionsList.slice(
-                      state.sendedActionsPrefixLenght
-                    ),
-                  actionsPrefix : state.localActionsList.slice(
-                    Math.max(
-                      0, 
-                      state.sendedActionsPrefixLenght - state.maxPatternLenght
-                    ),
-                    state.sendedActionsPrefixLenght
-                  ),
-                  toDelete : state.toDelete
-                }
-                try{
-                  let fetchRes = await fetch('http://localhost:3006/push_data', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(respData)
-                  })
-                  if (fetchRes.ok) {
-                    const ans : PushDataAns = await fetchRes.json()
-                    console.log("push answer: ", ans)
-                    if (ans === "succes") {
-                      console.log("sucessful push")
-                      await writeRuntimeState(
-                        {
-                          sendedActionsPrefixLenght : state.localActionsList.length,
-                          settingsLocallyChanged : false,
-                          toDelete : []
-                        }
-                      )
-                    }
-                    else if (ans === 'authFailed') {
-                      console.error('autn failed on server side')
-                      await browser.identity.removeCachedAuthToken({token : authToken})
-                    }
-                    else {
-                      console.log("server push logic went wrong, answer: ", ans)
-                    }
-                  }
-                  else {
-                    console.error("Bed answer code on push")
-                  }
-                }
-                catch(err){
-                  console.error("error on push: ", err)
-                }
-              }
-              else
-                console.error('failed to get token from user')
-            }
-            else{
-              console.error("runtime state not inited")
-            }
-          }
-        )
+        pushData();
         
       }
       else if (alarm.name === "pull_alarm") {
-        stateInteractQueue = stateInteractQueue.then(
-          async () => {
-            let state = await readRuntimeState(['localActionsList', 'settingsLocallyChanged'])
-            if (state !== undefined) {
-              const authToken = await getAuthToken()
-              if (authToken !== undefined) {
-                try{
-                  const req : PullDataReq = {
-                    auth : {
-                      googleOauthToken : authToken
-                    }
-                  }
-                  let fetchAns = await fetch('http://localhost:3006/pull_data', 
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json'
-                      },
-                      body : JSON.stringify(req)
-                    }
-                  )
-                  if (fetchAns.ok) {
-                    const ans : PullDataAns = await fetchAns.json()
-                    console.log("pull answer: ", ans)
-                    if (ans === "fail") {
-                      console.error("some error on server side (pull data)")
-                    }
-                    else if (ans === 'authFailed') {
-                      console.error('autn failed on server side')
-                      await browser.identity.removeCachedAuthToken({token : authToken})
-                    }
-                    else {
-                      let tree = createPatternTreeFromData(ans.tree)
-                      let automations = {}
-                      collectBestAutomations(tree, automations, undefined, ans.settings.automationsCount)
-                      let settings : Partial<RuntimeSettings> = {
-                        maxPatternLenght : ans.settings.maxPatternLenght,
-                        automationsCount : ans.settings.automationsCount,
-                      }
-                      let cursors = new Array<PatternTreeNodeID|null>(ans.settings.maxPatternLenght).fill(null)
-                      cursors[0] = tree.rootPatternTreeNode
-                      await clearPatternTreeAndAutomations()
-                      await writeRuntimeState(tree)
-                      await writeRuntimeState(automations)
-                      await writeRuntimeState({cursors : cursors})
-                      if (!state.settingsLocallyChanged)
-                        await writeRuntimeState(settings)
-                      for (let i = Math.max(0, state.localActionsList.length - settings.maxPatternLenght!!); i < state.localActionsList.length; i++) {
-                        await shiftCursors(state.localActionsList[i])
-                      }
-                      await sendAutomations()
-                      console.log("succesful pull")
-                    }
-                  }
-                  else {
-                    console.error("beg response status code on pull")
-                  }
-                }
-                catch(e){
-                  console.error("some error on pull: ", e)
-                }
-              }
-            }
-            else{
-              console.error("runtime state not inited")
-            }
-          }
-        )
+        pullData();
         
       }
     }
   )
 
 });
+function pushData() {
+  stateInteractQueue = stateInteractQueue.then(
+    async () => {
+      let state = await readRuntimeState(['toDelete', 'maxPatternLenght', 'automationsCount', 'localActionsList', 'sendedActionsPrefixLenght', 'settingsLocallyChanged']);
+      if (state !== undefined) {
+        const authToken = await getAuthToken();
+        if (authToken !== undefined) {
+          const respData: PushDataReq = {
+            auth: {
+              googleOauthToken: authToken
+            },
+            settings: state.settingsLocallyChanged ? {
+              maxPatternLenght: state.maxPatternLenght,
+              automationsCount: state.automationsCount
+            } : undefined,
+            actions: state.localActionsList.slice(
+              state.sendedActionsPrefixLenght
+            ),
+            actionsPrefix: state.localActionsList.slice(
+              Math.max(
+                0,
+                state.sendedActionsPrefixLenght - state.maxPatternLenght
+              ),
+              state.sendedActionsPrefixLenght
+            ),
+            toDelete: state.toDelete
+          };
+          try {
+            let fetchRes = await fetch('http://localhost:3006/push_data', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(respData)
+            });
+            if (fetchRes.ok) {
+              const ans: PushDataAns = await fetchRes.json();
+              console.log("push answer: ", ans);
+              if (ans === "succes") {
+                console.log("sucessful push");
+                await writeRuntimeState(
+                  {
+                    sendedActionsPrefixLenght: state.localActionsList.length,
+                    settingsLocallyChanged: false,
+                    toDelete: []
+                  }
+                );
+              }
+              else if (ans === 'authFailed') {
+                console.error('autn failed on server side');
+                await browser.identity.removeCachedAuthToken({ token: authToken });
+              }
+              else {
+                console.log("server push logic went wrong, answer: ", ans);
+              }
+            }
+            else {
+              console.error("Bed answer code on push");
+            }
+          }
+          catch (err) {
+            console.error("error on push: ", err);
+          }
+        }
+
+        else
+          console.error('failed to get token from user');
+      }
+      else {
+        console.error("runtime state not inited");
+      }
+    }
+  );
+}
+
+function pullData() {
+  stateInteractQueue = stateInteractQueue.then(
+    async () => {
+      let state = await readRuntimeState(['localActionsList', 'settingsLocallyChanged']);
+      if (state !== undefined) {
+        const authToken = await getAuthToken();
+        if (authToken !== undefined) {
+          try {
+            const req: PullDataReq = {
+              auth: {
+                googleOauthToken: authToken
+              }
+            };
+            let fetchAns = await fetch('http://localhost:3006/pull_data',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(req)
+              }
+            );
+            if (fetchAns.ok) {
+              const ans: PullDataAns = await fetchAns.json();
+              console.log("pull answer: ", ans);
+              if (ans === "fail") {
+                console.error("some error on server side (pull data)");
+              }
+              else if (ans === 'authFailed') {
+                console.error('autn failed on server side');
+                await browser.identity.removeCachedAuthToken({ token: authToken });
+              }
+              else {
+                let tree = createPatternTreeFromData(ans.tree);
+                let automations = {};
+                collectBestAutomations(tree, automations, undefined, ans.settings.automationsCount);
+                let settings: Partial<RuntimeSettings> = {
+                  maxPatternLenght: ans.settings.maxPatternLenght,
+                  automationsCount: ans.settings.automationsCount,
+                };
+                let cursors = new Array<PatternTreeNodeID | null>(ans.settings.maxPatternLenght).fill(null);
+                cursors[0] = tree.rootPatternTreeNode;
+                await clearPatternTreeAndAutomations();
+                await writeRuntimeState(tree);
+                await writeRuntimeState(automations);
+                await writeRuntimeState({ cursors: cursors });
+                if (!state.settingsLocallyChanged)
+                  await writeRuntimeState(settings);
+                for (let i = Math.max(0, state.localActionsList.length - settings.maxPatternLenght!!); i < state.localActionsList.length; i++) {
+                  await shiftCursors(state.localActionsList[i]);
+                }
+                automationsCollectingAbortController.abort();
+                const currentAbortController = automationsCollectingAbortController = new AbortController();
+                try {
+                  await sendAutomations(currentAbortController.signal);
+                }
+                catch (e) {
+                  console.warn('automations collecting aborted in pull ', e);
+                }
+                console.log("succesful pull");
+              }
+            }
+            else {
+              console.error("beg response status code on pull");
+            }
+          }
+          catch (e) {
+            console.error("some error on pull: ", e);
+          }
+        }
+      }
+      else {
+        console.error("runtime state not inited");
+      }
+    }
+  );
+}
+
